@@ -40,6 +40,13 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(large.overlay_width, 2400)
         self.assertEqual(large.overlay_max_height, 1200)
 
+    def test_translation_history_limit_is_clamped(self) -> None:
+        small = _coerce_settings({"translation_history_limit": 1})
+        large = _coerce_settings({"translation_history_limit": 9999})
+
+        self.assertEqual(small.translation_history_limit, 20)
+        self.assertEqual(large.translation_history_limit, 1000)
+
     def test_overlay_accumulate_accepts_string_false(self) -> None:
         settings = _coerce_settings({"overlay_accumulate": "false"})
 

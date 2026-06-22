@@ -66,6 +66,7 @@ class AppSettings:
     overlay_manual_y: int = -1
     overlay_accumulate: bool = True
     overlay_history_limit: int = 5
+    translation_history_limit: int = 200
     show_original: bool = True
 
 
@@ -99,6 +100,7 @@ def _coerce_settings(data: dict[str, Any]) -> AppSettings:
     settings.overlay_manual_y = min(max(int(settings.overlay_manual_y), -1), 20000)
     settings.overlay_accumulate = _coerce_bool(settings.overlay_accumulate, True)
     settings.overlay_history_limit = min(max(int(settings.overlay_history_limit), 1), 12)
+    settings.translation_history_limit = min(max(int(settings.translation_history_limit), 20), 1000)
     return settings
 
 

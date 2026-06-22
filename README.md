@@ -84,7 +84,7 @@ RTST_BROWSER_SUBTITLE_SELECTOR=
 OCR이 빈 값이면 마지막 OCR 입력 이미지가 기본적으로 `rtst_last_capture.png`에 저장됩니다. 이 이미지가 검거나 자막을 포함하지 않으면 `Select subtitle region`으로 영역을 다시 잡아야 합니다.
 
 오버레이는 화면 위에서 직접 드래그해 옮길 수 있고, 놓은 위치는 `manual` 위치로 저장됩니다. `Overlay position`에서 `bottom`, `top`, `center`, `custom_region`, `manual`을 고를 수 있으며 X/Y offset으로 미세 조정할 수 있습니다. 새 번역은 기본적으로 최근 항목에 누적되어 표시되고, `Accumulate subtitles`와 `History size`로 조정합니다.
-오버레이 크기는 `Overlay width`와 `Overlay max height`로 조절합니다. 이전 번역들은 `History` 탭에 채팅창처럼 원문/번역 쌍으로 계속 쌓이며, `Clear history`로 비울 수 있습니다.
+오버레이 크기는 `Overlay width`와 `Overlay max height`로 조절합니다. 이전 번역들은 `History` 탭에 채팅창처럼 원문/번역 쌍으로 계속 쌓이며, `Max`로 보관 개수를 조절하고 `Clear history`로 비울 수 있습니다.
 
 ## 직접 API 키 모드
 

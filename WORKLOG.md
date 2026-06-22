@@ -38,7 +38,7 @@ This file tracks what has been completed so far and what Codex changes while the
 ## Autonomous Work Branch
 
 - Base protection strategy: initialize a local Git repository if none exists, commit the current baseline, then continue on a separate branch.
-- Branch name: to be recorded after branch creation.
+- Branch name: `codex/autonomous-improvements-20260623-011159`
 
 ## Autonomous Work Log
 
@@ -47,3 +47,11 @@ This file tracks what has been completed so far and what Codex changes while the
 - Started autonomous maintenance session requested by the user.
 - Added `.tmp_openclaw/`, logs, temporary files, and cache folders to `.gitignore` so baseline and future branches do not capture secrets or bulky runtime artifacts.
 - Created this worklog to keep progress, implementation notes, and validation results in one place.
+- Initialized a local Git repository because the project did not have one yet.
+- Committed the current implementation as baseline commit `566c183` on `main`.
+- Created and switched to `codex/autonomous-improvements-20260623-011159` for all unattended changes.
+- Improvement 1: added a configurable translation history retention limit.
+  - Added `translation_history_limit` to settings with a safe range of 20 to 1000.
+  - Added a `Max` control in the `History` tab.
+  - Trimmed older history entries automatically so long unattended sessions do not slow the UI indefinitely.
+  - Updated README, SPEC, and config tests.

@@ -570,6 +570,10 @@ class MainWindow(QMainWindow):
             """
         )
         self.clear_history_button = QPushButton("Clear history")
+        self.translation_history_limit_spin = QSpinBox()
+        self.translation_history_limit_spin.setRange(20, 1000)
+        self.translation_history_limit_spin.setSingleStep(20)
+        self.translation_history_limit_spin.setSuffix(" items")
 
         tabs = QTabWidget()
         layout.addWidget(tabs)
@@ -592,6 +596,8 @@ class MainWindow(QMainWindow):
         history_toolbar = QHBoxLayout()
         history_toolbar.addWidget(QLabel("Translation history"))
         history_toolbar.addStretch(1)
+        history_toolbar.addWidget(QLabel("Max"))
+        history_toolbar.addWidget(self.translation_history_limit_spin)
         history_toolbar.addWidget(self.clear_history_button)
         history_layout.addLayout(history_toolbar)
         history_layout.addWidget(self.history_text)
@@ -638,6 +644,7 @@ class MainWindow(QMainWindow):
         self.oauth_login_button.clicked.connect(self.oauth_login)
         self.oauth_clear_button.clicked.connect(self.clear_oauth_token)
         self.clear_history_button.clicked.connect(self.clear_translation_history)
+        self.translation_history_limit_spin.valueChanged.connect(self._trim_translation_history)
         self.source_combo.currentTextChanged.connect(self._handle_source_changed)
         self.provider_combo.currentTextChanged.connect(self._handle_provider_changed)
         self.opacity_slider.valueChanged.connect(self._preview_overlay_style)
@@ -674,6 +681,7 @@ class MainWindow(QMainWindow):
         self.overlay_offset_y_spin.setValue(self.settings.overlay_offset_y)
         self.overlay_accumulate_check.setChecked(self.settings.overlay_accumulate)
         self.overlay_history_limit_spin.setValue(self.settings.overlay_history_limit)
+        self.translation_history_limit_spin.setValue(self.settings.translation_history_limit)
         self.show_original_check.setChecked(self.settings.show_original)
         self._handle_source_changed(self.source_combo.currentText())
         self._handle_provider_changed(self.provider_combo.currentText())
@@ -705,6 +713,7 @@ class MainWindow(QMainWindow):
             overlay_offset_y=self.overlay_offset_y_spin.value(),
             overlay_accumulate=self.overlay_accumulate_check.isChecked(),
             overlay_history_limit=self.overlay_history_limit_spin.value(),
+            translation_history_limit=self.translation_history_limit_spin.value(),
             show_original=self.show_original_check.isChecked(),
         )
 
@@ -1026,12 +1035,20 @@ class MainWindow(QMainWindow):
         if self.translation_history and self.translation_history[-1] == (source, translation):
             return
         self.translation_history.append((source, translation))
+        self._trim_translation_history(render=False)
         self._render_translation_history()
 
     def clear_translation_history(self) -> None:
         self.translation_history.clear()
         self.history_text.clear()
         self.status_label.setText("History cleared")
+
+    def _trim_translation_history(self, *_args: object, render: bool = True) -> None:
+        limit = self.translation_history_limit_spin.value()
+        if len(self.translation_history) > limit:
+            self.translation_history = self.translation_history[-limit:]
+        if render:
+            self._render_translation_history()
 
     def _render_translation_history(self) -> None:
         if not self.translation_history:
