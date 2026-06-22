@@ -73,3 +73,7 @@ This file tracks what has been completed so far and what Codex changes while the
   - Replaced OCR-only wording with subtitle text wording that covers OCR and DOM extraction.
   - Added explicit guidance to ignore accidental player UI text such as titles, buttons, menus, timestamps, control labels, and tooltips.
   - Added a regression test for the instruction content.
+- Improvement 6: added `.gitattributes` for predictable line endings.
+  - Python, Markdown, JSON, and text-like files use LF.
+  - Windows batch files use CRLF.
+  - This reduces noisy Git line-ending warnings during future work.
