@@ -29,6 +29,25 @@ DEFAULT_SUBTITLE_SELECTORS = [
     "[class*='timedtext' i]",
 ]
 
+MEDIA_TAB_KEYWORDS = (
+    "youtube",
+    "youtu.be",
+    "netflix",
+    "disney",
+    "primevideo",
+    "hulu",
+    "vimeo",
+    "twitch",
+    "ted",
+    "coursera",
+    "udemy",
+    "khan",
+    "player",
+    "video",
+    "watch",
+    "embed",
+)
+
 
 class BrowserDomError(RuntimeError):
     pass
@@ -256,21 +275,7 @@ class BrowserDomSubtitleReader:
         return self._websocket
 
     def _find_target_websocket_url(self) -> str:
-        url = self.debug_url.rstrip("/") + "/json/list"
-        try:
-            response = requests.get(url, timeout=self.timeout_seconds)
-            response.raise_for_status()
-            targets = response.json()
-        except requests.RequestException as exc:
-            raise BrowserDomError(
-                "Could not reach Chrome DevTools. Launch Chrome with "
-                "--remote-debugging-port=9222 or use run_rtst_browser_dom.bat."
-            ) from exc
-        except ValueError as exc:
-            raise BrowserDomError("Chrome DevTools target list was not JSON.") from exc
-
-        if not isinstance(targets, list):
-            raise BrowserDomError("Chrome DevTools target list was not a list.")
+        targets = self._list_targets()
 
         pages = [
             target
@@ -291,7 +296,97 @@ class BrowserDomSubtitleReader:
                     return str(page["webSocketDebuggerUrl"])
             raise BrowserDomError(f"No Chrome tab matched tab filter: {self.tab_filter}")
 
-        return str(pages[0]["webSocketDebuggerUrl"])
+        selected = self._select_best_page(pages)
+        return str(selected["webSocketDebuggerUrl"])
+
+    def _list_targets(self) -> list[Any]:
+        url = self.debug_url.rstrip("/") + "/json/list"
+        try:
+            response = requests.get(url, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            targets = response.json()
+        except requests.RequestException as exc:
+            raise BrowserDomError(
+                "Could not reach Chrome DevTools. Launch Chrome with "
+                "--remote-debugging-port=9222 or use run_rtst_browser_dom.bat."
+            ) from exc
+        except ValueError as exc:
+            raise BrowserDomError("Chrome DevTools target list was not JSON.") from exc
+
+        if not isinstance(targets, list):
+            raise BrowserDomError("Chrome DevTools target list was not a list.")
+
+        return targets
+
+    def _select_best_page(self, pages: list[dict[str, Any]]) -> dict[str, Any]:
+        scored: list[tuple[int, int, dict[str, Any]]] = []
+        for index, page in enumerate(pages):
+            websocket_url = page.get("webSocketDebuggerUrl")
+            score = self._static_page_score(page)
+            if isinstance(websocket_url, str):
+                score += self._probe_page_score(websocket_url)
+            scored.append((score, -index, page))
+
+        score, _order, selected = max(scored, key=lambda item: (item[0], item[1]))
+        log.info(
+            "dom_target_selected score=%s title=%r url=%r",
+            score,
+            clip_text(str(selected.get("title", ""))),
+            clip_text(str(selected.get("url", ""))),
+        )
+        return selected
+
+    @staticmethod
+    def _static_page_score(page: dict[str, Any]) -> int:
+        title = str(page.get("title", "")).lower()
+        page_url = str(page.get("url", "")).lower()
+        text = f"{title} {page_url}"
+        score = sum(2 for keyword in MEDIA_TAB_KEYWORDS if keyword in text)
+        if page_url.startswith(("chrome://", "devtools://", "edge://", "about:")):
+            score -= 5
+        return score
+
+    def _probe_page_score(self, websocket_url: str) -> int:
+        websocket_module = self._import_websocket()
+        timeout = min(max(self.timeout_seconds, 0.5), 1.5)
+        websocket = None
+        try:
+            websocket = websocket_module.create_connection(
+                websocket_url,
+                timeout=timeout,
+                suppress_origin=True,
+            )
+            websocket.send(
+                json.dumps(
+                    {
+                        "id": 1,
+                        "method": "Runtime.evaluate",
+                        "params": {
+                            "expression": build_tab_probe_script(),
+                            "returnByValue": True,
+                            "awaitPromise": False,
+                        },
+                    }
+                )
+            )
+            while True:
+                data = json.loads(websocket.recv())
+                if data.get("id") != 1:
+                    continue
+                if "error" in data or "exceptionDetails" in data.get("result", {}):
+                    return 0
+                remote_object = data.get("result", {}).get("result", {})
+                value = remote_object.get("value") if isinstance(remote_object, dict) else 0
+                return int(value) if isinstance(value, (int, float)) else 0
+        except Exception as exc:  # noqa: BLE001
+            log.info("dom_target_probe_failed error=%r", str(exc))
+            return 0
+        finally:
+            if websocket is not None:
+                try:
+                    websocket.close()
+                except Exception:  # noqa: BLE001
+                    pass
 
     @staticmethod
     def _import_websocket() -> Any:
@@ -494,5 +589,59 @@ def build_subtitle_script(subtitle_selector: str = "") -> str:
   }}
 
   return domParts.join("\\n");
+}})()
+""".strip()
+
+
+def build_tab_probe_script() -> str:
+    selectors_json = json.dumps(DEFAULT_SUBTITLE_SELECTORS)
+    return f"""
+(() => {{
+  const selectors = {selectors_json};
+
+  function visible(element) {{
+    if (!element || !element.getBoundingClientRect) return false;
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    return (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < window.innerHeight &&
+      rect.left < window.innerWidth &&
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      Number(style.opacity || "1") > 0
+    );
+  }}
+
+  let score = 0;
+  const videos = Array.from(document.querySelectorAll("video")).filter(visible);
+  score += videos.length * 20;
+  for (const video of videos) {{
+    for (const track of Array.from(video.textTracks || [])) {{
+      score += 4;
+      if (track.activeCues && track.activeCues.length) score += 12;
+    }}
+  }}
+
+  for (const selector of selectors) {{
+    try {{
+      const matches = Array.from(document.querySelectorAll(selector)).filter(visible);
+      score += Math.min(matches.length, 5) * 3;
+    }} catch (_error) {{
+      continue;
+    }}
+  }}
+
+  const mediaIframePattern = /(youtube|youtu\\.be|vimeo|player|video|watch|embed|twitch)/i;
+  const iframes = Array.from(document.querySelectorAll("iframe")).filter((frame) => {{
+    const text = `${{frame.src || ""}} ${{frame.title || ""}} ${{frame.name || ""}}`;
+    return mediaIframePattern.test(text);
+  }});
+  score += iframes.length * 10;
+
+  return score;
 }})()
 """.strip()

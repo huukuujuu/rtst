@@ -4,7 +4,12 @@ import unittest
 
 from typing import Any
 
-from rtst_app.browser_dom import BrowserDomSubtitleReader, DEFAULT_SUBTITLE_SELECTORS, build_subtitle_script
+from rtst_app.browser_dom import (
+    BrowserDomSubtitleReader,
+    DEFAULT_SUBTITLE_SELECTORS,
+    build_subtitle_script,
+    build_tab_probe_script,
+)
 
 
 class FakeReader(BrowserDomSubtitleReader):
@@ -21,6 +26,19 @@ class FakeReader(BrowserDomSubtitleReader):
     ) -> dict[str, Any]:
         self.calls.append((method, params))
         return self.responses.get(method, {})
+
+
+class FakeTargetReader(BrowserDomSubtitleReader):
+    def __init__(self, targets: list[dict[str, Any]], scores: dict[str, int] | None = None) -> None:
+        super().__init__()
+        self.targets = targets
+        self.scores = scores or {}
+
+    def _list_targets(self) -> list[Any]:
+        return self.targets
+
+    def _probe_page_score(self, websocket_url: str) -> int:
+        return self.scores.get(websocket_url, 0)
 
 
 class BrowserDomTests(unittest.TestCase):
@@ -40,6 +58,13 @@ class BrowserDomTests(unittest.TestCase):
         self.assertIn(".ytp-title", script)
         self.assertIn("captionAreaCandidate", script)
         self.assertIn("hasSubtitleDescendant", script)
+
+    def test_tab_probe_script_scores_video_and_iframes(self) -> None:
+        script = build_tab_probe_script()
+
+        self.assertIn('document.querySelectorAll("video")', script)
+        self.assertIn('document.querySelectorAll("iframe")', script)
+        self.assertIn(DEFAULT_SUBTITLE_SELECTORS[0], script)
 
     def test_script_escapes_custom_selector(self) -> None:
         selector = ".caption[data-text=\"a'b\"]"
@@ -92,6 +117,49 @@ class BrowserDomTests(unittest.TestCase):
         self.assertEqual(reader._attach_iframe_sessions(), ["session-1"])
         self.assertEqual(reader.calls[1][0], "Target.attachToTarget")
         self.assertEqual(reader.calls[1][1]["targetId"], "iframe-1")
+
+    def test_find_target_prefers_probed_media_page_without_filter(self) -> None:
+        reader = FakeTargetReader(
+            [
+                {
+                    "type": "page",
+                    "title": "New Tab",
+                    "url": "chrome://newtab/",
+                    "webSocketDebuggerUrl": "ws://tab-a",
+                },
+                {
+                    "type": "page",
+                    "title": "Lesson",
+                    "url": "https://example.test/lesson",
+                    "webSocketDebuggerUrl": "ws://tab-b",
+                },
+            ],
+            scores={"ws://tab-b": 30},
+        )
+
+        self.assertEqual(reader._find_target_websocket_url(), "ws://tab-b")
+
+    def test_find_target_filter_takes_precedence_over_probe_score(self) -> None:
+        reader = FakeTargetReader(
+            [
+                {
+                    "type": "page",
+                    "title": "Target Lesson",
+                    "url": "https://example.test/lesson",
+                    "webSocketDebuggerUrl": "ws://tab-a",
+                },
+                {
+                    "type": "page",
+                    "title": "Video",
+                    "url": "https://video.example.test/watch",
+                    "webSocketDebuggerUrl": "ws://tab-b",
+                },
+            ],
+            scores={"ws://tab-b": 50},
+        )
+        reader.tab_filter = "target"
+
+        self.assertEqual(reader._find_target_websocket_url(), "ws://tab-a")
 
 
 if __name__ == "__main__":

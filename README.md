@@ -37,7 +37,7 @@ Copy-Item .env.example .env
 .\run_rtst_browser_dom.bat
 ```
 
-이 배치 파일은 Chrome을 `--remote-debugging-port=9222`로 별도 프로필에서 열고, 앱의 `Subtitle source`를 `browser_dom`으로 맞춥니다. 열린 Chrome에서 영상 서비스에 로그인하고 자막을 켠 뒤 앱에서 `Start`를 누르세요. 자막 CSS selector를 알고 있다면 `Subtitle CSS selector`에 넣고, 모르면 비워두면 기본 후보와 `video.textTracks.activeCues`를 읽습니다. YouTube가 다른 웹 페이지 안의 iframe으로 열려 있어도 Chrome frame tree를 따라가며 하위 frame에서 자막을 찾습니다.
+이 배치 파일은 Chrome을 `--remote-debugging-port=9222`로 별도 프로필에서 열고, 앱의 `Subtitle source`를 `browser_dom`으로 맞춥니다. 열린 Chrome에서 영상 서비스에 로그인하고 자막을 켠 뒤 앱에서 `Start`를 누르세요. 자막 CSS selector를 알고 있다면 `Subtitle CSS selector`에 넣고, 모르면 비워두면 기본 후보와 `video.textTracks.activeCues`를 읽습니다. YouTube가 다른 웹 페이지 안의 iframe으로 열려 있어도 Chrome frame tree를 따라가며 하위 frame에서 자막을 찾습니다. `Browser tab filter`가 비어 있으면 비디오, 자막, 미디어 iframe이 있는 탭을 우선 선택합니다.
 `browser_dom` 모드는 실제 `video.textTracks.activeCues`가 있으면 그 값을 우선 사용하고, DOM 후보를 읽을 때는 영상 상단 타이틀/컨트롤바/메뉴처럼 마우스 오버 때 나타나는 UI 텍스트를 제외합니다. 자식 자막 노드가 따로 잡히는 경우에는 부모 자막 컨테이너를 건너뛰어 같은 문장이 중복으로 번역되는 일을 줄입니다.
 
 ## Codex OAuth 설정

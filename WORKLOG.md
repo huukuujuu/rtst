@@ -60,3 +60,8 @@ This file tracks what has been completed so far and what Codex changes while the
   - Skipped parent subtitle containers when visible child subtitle nodes are available.
   - This reduces duplicate source text and repeated translations on players that expose both caption windows and caption segments.
   - Updated README, SPEC, and browser DOM tests.
+- Improvement 3: improved automatic Chrome tab selection for browser DOM mode.
+  - Added a DevTools probe that scores debuggable pages by visible video elements, active text tracks, subtitle DOM nodes, and media iframes.
+  - Kept `Browser tab filter` as the highest priority when the user sets it.
+  - This should reduce cases where the app connects to a blank/new tab and appears to do nothing.
+  - Updated README, SPEC, and browser DOM tests.
