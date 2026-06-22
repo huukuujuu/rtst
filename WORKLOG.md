@@ -77,3 +77,9 @@ This file tracks what has been completed so far and what Codex changes while the
   - Python, Markdown, JSON, and text-like files use LF.
   - Windows batch files use CRLF.
   - This reduces noisy Git line-ending warnings during future work.
+- Improvement 7: cleaned noisy DOM subtitle text based on observed logs.
+  - Found repeated phrases and player timeline text such as `0:02 / 19:45 Intro` in `rtst_debug.log`.
+  - Added DOM-only post-processing to remove media progress text and safe common chapter labels such as `Intro`.
+  - Added phrase-level repetition collapse for cases where the same subtitle phrase is duplicated two or three times.
+  - Kept short emphasis such as `no no no` unchanged.
+  - Updated README, SPEC, and browser DOM tests.

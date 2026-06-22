@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -12,6 +13,17 @@ from rtst_app.text_utils import normalize_ocr_text
 
 
 log = get_logger("browser_dom")
+
+_MEDIA_PROGRESS_PATTERN_SOURCE = (
+    r"\b\d{1,2}:\d{2}(?::\d{2})?\s*/\s*"
+    r"\d{1,2}:\d{2}(?::\d{2})?"
+)
+_MEDIA_PROGRESS_PATTERN = re.compile(_MEDIA_PROGRESS_PATTERN_SOURCE)
+_MEDIA_PROGRESS_WITH_CHAPTER_AT_END = re.compile(
+    _MEDIA_PROGRESS_PATTERN_SOURCE
+    + r"(?:\s+(?:Intro|Introduction|Outro|Credits|Chapter\s+\d+))?\s*$",
+    re.IGNORECASE,
+)
 
 DEFAULT_SUBTITLE_SELECTORS = [
     ".ytp-caption-segment",
@@ -85,7 +97,7 @@ class BrowserDomSubtitleReader:
             self._target_websocket_url = self._find_target_websocket_url()
             result = self._evaluate_all_frames(script)
 
-        text = normalize_ocr_text(result)
+        text = clean_dom_subtitle_text(result)
         elapsed_ms = (time.perf_counter() - started_at) * 1000
         log.info("dom_subtitle_read read_ms=%.1f text=%r", elapsed_ms, clip_text(text))
         return text
@@ -96,7 +108,7 @@ class BrowserDomSubtitleReader:
 
         main_text = self._evaluate(expression)
         if main_text:
-            text = normalize_ocr_text(main_text)
+            text = clean_dom_subtitle_text(main_text)
             if text and text not in seen:
                 seen.add(text)
                 parts.append(text)
@@ -106,7 +118,7 @@ class BrowserDomSubtitleReader:
             if context_id is None:
                 continue
             frame_text = self._evaluate(expression, context_id=context_id)
-            text = normalize_ocr_text(frame_text)
+            text = clean_dom_subtitle_text(frame_text)
             if text and text not in seen:
                 seen.add(text)
                 parts.append(text)
@@ -114,7 +126,7 @@ class BrowserDomSubtitleReader:
         for session_id in self._attach_iframe_sessions():
             try:
                 frame_text = self._evaluate(expression, session_id=session_id)
-                text = normalize_ocr_text(frame_text)
+                text = clean_dom_subtitle_text(frame_text)
                 if text and text not in seen:
                     seen.add(text)
                     parts.append(text)
@@ -397,6 +409,30 @@ class BrowserDomSubtitleReader:
                 "websocket-client is not installed. Run: pip install -r requirements.txt"
             ) from exc
         return websocket
+
+
+def clean_dom_subtitle_text(text: str) -> str:
+    cleaned = _MEDIA_PROGRESS_WITH_CHAPTER_AT_END.sub(" ", text)
+    cleaned = _MEDIA_PROGRESS_PATTERN.sub(" ", cleaned)
+    cleaned = normalize_ocr_text(cleaned)
+    return _collapse_full_word_repetition(cleaned)
+
+
+def _collapse_full_word_repetition(text: str) -> str:
+    words = text.split()
+    if len(words) < 6:
+        return text
+
+    for segment_length in range(3, (len(words) // 2) + 1):
+        if len(words) % segment_length != 0:
+            continue
+        segment = words[:segment_length]
+        if all(
+            words[index : index + segment_length] == segment
+            for index in range(segment_length, len(words), segment_length)
+        ):
+            return " ".join(segment)
+    return text
 
 
 def build_subtitle_script(subtitle_selector: str = "") -> str:

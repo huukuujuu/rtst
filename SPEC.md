@@ -50,6 +50,7 @@ Codex 백엔드 호출 헤더:
 - `mss`로 지정 영역을 빠르게 스캔하고, 화면 변화가 안정되거나 최대 대기 시간을 넘겼을 때만 OCR을 실행한다.
 - `browser_dom` 모드에서는 Chrome DevTools 포트에 연결해 `video.textTracks.activeCues`, 흔한 자막 selector, shadow DOM 내부 selector에서 자막 텍스트를 읽는다.
 - `browser_dom` 모드는 실제 `textTracks.activeCues`를 DOM selector보다 우선하고, DOM fallback에서는 마우스 오버 시 나타나는 플레이어 타이틀/컨트롤/메뉴 텍스트와 자식 자막 노드를 가진 부모 컨테이너를 제외한다.
+- `browser_dom` 모드는 DOM fallback 결과에서 플레이어 진행 시간과 완전히 반복된 자막 문구를 후처리로 줄인다.
 - `browser_dom` 모드는 탭 필터가 비어 있으면 Chrome DevTools의 debuggable page 중 비디오, 자막 DOM, 미디어 iframe이 있는 탭을 우선 선택한다.
 - `browser_dom` 모드는 Chrome frame tree를 순회하고 하위 frame마다 isolated world를 만들어 embed/iframe 플레이어 자막도 시도한다.
 - Windows OCR 또는 Tesseract OCR을 선택할 수 있다.

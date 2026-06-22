@@ -9,6 +9,7 @@ from rtst_app.browser_dom import (
     DEFAULT_SUBTITLE_SELECTORS,
     build_subtitle_script,
     build_tab_probe_script,
+    clean_dom_subtitle_text,
 )
 
 
@@ -65,6 +66,29 @@ class BrowserDomTests(unittest.TestCase):
         self.assertIn('document.querySelectorAll("video")', script)
         self.assertIn('document.querySelectorAll("iframe")', script)
         self.assertIn(DEFAULT_SUBTITLE_SELECTORS[0], script)
+
+    def test_clean_dom_text_removes_media_progress(self) -> None:
+        self.assertEqual(
+            clean_dom_subtitle_text("so now I want to jump 0:02 / 19:45 Intro"),
+            "so now I want to jump",
+        )
+
+    def test_clean_dom_text_keeps_words_after_mid_sentence_progress(self) -> None:
+        self.assertEqual(
+            clean_dom_subtitle_text("so now 0:02 / 19:45 I want to jump"),
+            "so now I want to jump",
+        )
+
+    def test_clean_dom_text_collapses_full_phrase_repetition(self) -> None:
+        self.assertEqual(
+            clean_dom_subtitle_text(
+                "so now I want to jump so now I want to jump 0:02 / 19:45 Intro"
+            ),
+            "so now I want to jump",
+        )
+
+    def test_clean_dom_text_does_not_collapse_short_emphasis(self) -> None:
+        self.assertEqual(clean_dom_subtitle_text("no no no"), "no no no")
 
     def test_script_escapes_custom_selector(self) -> None:
         selector = ".caption[data-text=\"a'b\"]"
