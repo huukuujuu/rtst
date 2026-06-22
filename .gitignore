@@ -1,0 +1,15 @@
+.venv/
+.chrome-rtst/
+.tmp_openclaw/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+rtst_settings.json
+rtst_oauth_token.json
+rtst_codex_oauth_token.json
+rtst_debug.log
+*.log
+rtst_last_capture.png
+rtst_region_debug.png
+*.tmp
+.env
