@@ -29,6 +29,18 @@ class BaseTranslator:
         raise NotImplementedError
 
 
+def _subtitle_translation_instructions(source_language: str, target_language: str) -> str:
+    return (
+        "You are a subtitle translation engine for a language learner. "
+        f"Translate subtitle text from {source_language} into {target_language}. "
+        "Return only the translated subtitle text. Do not add explanations, labels, "
+        "quotes, source text, romanization, or notes. Keep it natural and concise. "
+        "If OCR or extracted DOM text is noisy, translate only the readable subtitle-like part. "
+        "Ignore obvious player UI such as titles, buttons, menus, timestamps, control labels, "
+        "or tooltips if they appear accidentally."
+    )
+
+
 @dataclass(slots=True)
 class MockTranslator(BaseTranslator):
     target_language: str = "Korean"
@@ -54,18 +66,14 @@ class OpenAITranslator(BaseTranslator):
             "input": [
                 {
                     "role": "system",
-                    "content": (
-                        "You translate subtitles for a language learner. "
-                        "Return only the translation. Keep it concise, natural, "
-                        "and suitable for an on-screen overlay. Do not add notes."
+                    "content": _subtitle_translation_instructions(
+                        self.source_language,
+                        self.target_language,
                     ),
                 },
                 {
                     "role": "user",
-                    "content": (
-                        f"Translate this {self.source_language} subtitle into "
-                        f"{self.target_language}:\n{text}"
-                    ),
+                    "content": f"<subtitle>{text}</subtitle>",
                 },
             ],
             "max_output_tokens": 180,
@@ -181,12 +189,9 @@ class CodexOAuthTranslator(BaseTranslator):
             "model": self.model,
             "store": False,
             "stream": True,
-            "instructions": (
-                "You are a subtitle translation engine for a language learner. "
-                f"Translate OCR text from {self.source_language} into {self.target_language}. "
-                "Return only the translated subtitle text. Do not add explanations, labels, "
-                "quotes, source text, romanization, or notes. Keep it natural and concise. "
-                "If OCR text is noisy, translate only the readable subtitle-like part."
+            "instructions": _subtitle_translation_instructions(
+                self.source_language,
+                self.target_language,
             ),
             "input": [
                 {

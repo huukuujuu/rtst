@@ -11,6 +11,7 @@ from rtst_app.translator import (
     _codex_reasoning_effort_from_env,
     _extract_codex_stream_text,
     _resolve_codex_responses_url,
+    _subtitle_translation_instructions,
 )
 
 
@@ -60,6 +61,13 @@ class CodexOAuthTests(unittest.TestCase):
     def test_codex_reasoning_effort_can_be_disabled(self) -> None:
         with patch.dict(os.environ, {"RTST_CODEX_REASONING_EFFORT": "off"}):
             self.assertEqual(_codex_reasoning_effort_from_env(), "")
+
+    def test_translation_instructions_ignore_player_ui_noise(self) -> None:
+        instructions = _subtitle_translation_instructions("English", "Korean")
+
+        self.assertIn("extracted DOM text", instructions)
+        self.assertIn("player UI", instructions)
+        self.assertIn("titles, buttons, menus", instructions)
 
     def test_extract_codex_stream_text_from_deltas(self) -> None:
         lines = [

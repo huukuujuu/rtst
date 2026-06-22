@@ -68,3 +68,8 @@ This file tracks what has been completed so far and what Codex changes while the
 - Improvement 4: reset the duplicate-detection baseline when no subtitle text is visible.
   - When OCR/DOM returns empty text, `last_source_text` is cleared.
   - This allows the same subtitle text to be shown again after a real gap, usually through the translation cache rather than a new API call.
+- Improvement 5: strengthened translation instructions for noisy subtitle extraction.
+  - Shared one subtitle-translation instruction helper across OpenAI API key mode and Codex OAuth mode.
+  - Replaced OCR-only wording with subtitle text wording that covers OCR and DOM extraction.
+  - Added explicit guidance to ignore accidental player UI text such as titles, buttons, menus, timestamps, control labels, and tooltips.
+  - Added a regression test for the instruction content.
