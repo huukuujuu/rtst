@@ -55,3 +55,8 @@ This file tracks what has been completed so far and what Codex changes while the
   - Added a `Max` control in the `History` tab.
   - Trimmed older history entries automatically so long unattended sessions do not slow the UI indefinitely.
   - Updated README, SPEC, and config tests.
+- Improvement 2: tightened browser DOM subtitle fallback extraction.
+  - Kept `textTracks.activeCues` as the first-choice source.
+  - Skipped parent subtitle containers when visible child subtitle nodes are available.
+  - This reduces duplicate source text and repeated translations on players that expose both caption windows and caption segments.
+  - Updated README, SPEC, and browser DOM tests.

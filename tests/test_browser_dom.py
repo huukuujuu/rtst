@@ -39,6 +39,7 @@ class BrowserDomTests(unittest.TestCase):
         self.assertIn(".ytp-chrome-top", script)
         self.assertIn(".ytp-title", script)
         self.assertIn("captionAreaCandidate", script)
+        self.assertIn("hasSubtitleDescendant", script)
 
     def test_script_escapes_custom_selector(self) -> None:
         selector = ".caption[data-text=\"a'b\"]"

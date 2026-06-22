@@ -425,9 +425,29 @@ def build_subtitle_script(subtitle_selector: str = "") -> str:
     return horizontalOverlap && insideReadableBand && centeredOnVideo;
   }}
 
+  function hasSubtitleDescendant(element) {{
+    if (customSelector) return false;
+    for (const selector of selectors) {{
+      let descendants = [];
+      try {{
+        descendants = Array.from(element.querySelectorAll(selector));
+      }} catch (_error) {{
+        continue;
+      }}
+      for (const descendant of descendants) {{
+        if (descendant === element) continue;
+        if (!visible(descendant)) continue;
+        if (isControlUi(descendant)) continue;
+        return true;
+      }}
+    }}
+    return false;
+  }}
+
   function subtitleLikeElement(element) {{
     if (customSelector) return !isControlUi(element);
     if (isControlUi(element)) return false;
+    if (hasSubtitleDescendant(element)) return false;
     const tokens = elementTokens(element);
     const captionSignal = /(caption|captions|subtitle|subtitles|timedtext|text-track|texttrack|cue|ytp-caption|vjs-text-track|jw-text-track|aria-live)/i;
     return captionSignal.test(tokens) && captionAreaCandidate(element);
