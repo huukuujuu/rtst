@@ -65,3 +65,6 @@ This file tracks what has been completed so far and what Codex changes while the
   - Kept `Browser tab filter` as the highest priority when the user sets it.
   - This should reduce cases where the app connects to a blank/new tab and appears to do nothing.
   - Updated README, SPEC, and browser DOM tests.
+- Improvement 4: reset the duplicate-detection baseline when no subtitle text is visible.
+  - When OCR/DOM returns empty text, `last_source_text` is cleared.
+  - This allows the same subtitle text to be shown again after a real gap, usually through the translation cache rather than a new API call.

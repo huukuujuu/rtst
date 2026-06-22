@@ -1018,6 +1018,7 @@ class MainWindow(QMainWindow):
             self.source_text.setPlainText(text)
             self.status_label.setText("No text change")
         else:
+            self.last_source_text = ""
             self.source_text.setPlainText("")
             if self.settings.subtitle_source == "browser_dom":
                 self.status_label.setText("No DOM subtitle text - check tab or selector")
