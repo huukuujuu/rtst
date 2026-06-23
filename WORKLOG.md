@@ -114,3 +114,8 @@ This file tracks what has been completed so far and what Codex changes while the
   - Changed default overlay width and height to 600 px.
   - Changed default overlay font size to 15 px.
   - Added a config regression test for the compact defaults.
+- Improvement 15: decoupled subtitle detection from translation latency.
+  - Split source detection and translation into separate workers so new source subtitles can appear immediately while older translations are still running.
+  - Added a one-at-a-time translation queue to avoid firing many API requests in parallel.
+  - Guarded against stale translation results replacing the latest source text if a newer subtitle has already appeared.
+  - Repeated pending entries for the same source are completed together when the translation arrives.

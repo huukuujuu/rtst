@@ -68,11 +68,14 @@ def complete_history_entry(
 ) -> bool:
     if not source.strip() or not translation.strip():
         return False
+    completed = False
     for index in range(len(history) - 1, -1, -1):
         entry_source, entry_translation = history[index]
         if entry_source == source and not entry_translation.strip():
             history[index] = (source, translation)
-            return True
+            completed = True
+    if completed:
+        return True
     if history and history[-1] == (source, translation):
         return False
     history.append((source, translation))
@@ -422,8 +425,6 @@ class FrameProcessor(QRunnable):
         self,
         capturer: ScreenCapturer,
         ocr_engine: BaseOcr,
-        translator: BaseTranslator,
-        cache: TranslationCache,
         region: CaptureRegion,
         previous_text: str,
         image: Image.Image | None = None,
@@ -432,8 +433,6 @@ class FrameProcessor(QRunnable):
         self.signals = FrameSignals()
         self.capturer = capturer
         self.ocr_engine = ocr_engine
-        self.translator = translator
-        self.cache = cache
         self.region = region
         self.previous_text = previous_text
         self.image = image
@@ -466,26 +465,9 @@ class FrameProcessor(QRunnable):
                 return
 
             self.signals.source.emit(text)
-            cached = self.cache.get(text)
-            if cached is not None:
-                log.info("frame_cache_hit text=%r translation=%r", clip_text(text), clip_text(cached))
-                self.signals.result.emit(text, cached)
-                return
-
-            translate_started_at = time.perf_counter()
-            translated = self.translator.translate(text)
-            translate_ms = (time.perf_counter() - translate_started_at) * 1000
-            self.cache.set(text, translated)
             total_ms = (time.perf_counter() - started_at) * 1000
-            log.info(
-                "frame_translated translate_ms=%.1f total_ms=%.1f source=%r translation=%r",
-                translate_ms,
-                total_ms,
-                clip_text(text),
-                clip_text(translated),
-            )
-            self.signals.result.emit(text, translated)
-        except (OcrError, TranslationError, ValueError) as exc:
+            log.info("frame_source_detected total_ms=%.1f source=%r", total_ms, clip_text(text))
+        except (OcrError, ValueError) as exc:
             log.warning("frame_error error=%r", str(exc))
             self.signals.error.emit(str(exc), text if "text" in locals() else "")
         except Exception as exc:  # noqa: BLE001
@@ -497,15 +479,11 @@ class DomSubtitleProcessor(QRunnable):
     def __init__(
         self,
         reader: BrowserDomSubtitleReader,
-        translator: BaseTranslator,
-        cache: TranslationCache,
         previous_text: str,
     ) -> None:
         super().__init__()
         self.signals = FrameSignals()
         self.reader = reader
-        self.translator = translator
-        self.cache = cache
         self.previous_text = previous_text
 
     @Slot()
@@ -522,31 +500,42 @@ class DomSubtitleProcessor(QRunnable):
                 return
 
             self.signals.source.emit(text)
-            cached = self.cache.get(text)
-            if cached is not None:
-                log.info("dom_source_cache_hit text=%r translation=%r", clip_text(text), clip_text(cached))
-                self.signals.result.emit(text, cached)
-                return
-
-            translate_started_at = time.perf_counter()
-            translated = self.translator.translate(text)
-            translate_ms = (time.perf_counter() - translate_started_at) * 1000
-            self.cache.set(text, translated)
             total_ms = (time.perf_counter() - started_at) * 1000
-            log.info(
-                "dom_source_translated translate_ms=%.1f total_ms=%.1f source=%r translation=%r",
-                translate_ms,
-                total_ms,
-                clip_text(text),
-                clip_text(translated),
-            )
-            self.signals.result.emit(text, translated)
-        except (BrowserDomError, TranslationError, ValueError) as exc:
+            log.info("dom_source_detected total_ms=%.1f source=%r", total_ms, clip_text(text))
+        except (BrowserDomError, ValueError) as exc:
             log.warning("dom_source_error error=%r", str(exc))
             self.signals.error.emit(str(exc), text if "text" in locals() else "")
         except Exception as exc:  # noqa: BLE001
             log.exception("dom_source_unexpected_error")
             self.signals.error.emit(f"Unexpected error: {exc}", "")
+
+
+class TranslationProcessor(QRunnable):
+    def __init__(self, translator: BaseTranslator, source: str) -> None:
+        super().__init__()
+        self.signals = FrameSignals()
+        self.translator = translator
+        self.source = source
+
+    @Slot()
+    def run(self) -> None:
+        translate_started_at = time.perf_counter()
+        try:
+            translated = self.translator.translate(self.source)
+            translate_ms = (time.perf_counter() - translate_started_at) * 1000
+            log.info(
+                "translation_completed translate_ms=%.1f source=%r translation=%r",
+                translate_ms,
+                clip_text(self.source),
+                clip_text(translated),
+            )
+            self.signals.result.emit(self.source, translated)
+        except TranslationError as exc:
+            log.warning("translation_error error=%r source=%r", str(exc), clip_text(self.source))
+            self.signals.error.emit(str(exc), self.source)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("translation_unexpected_error")
+            self.signals.error.emit(f"Unexpected translation error: {exc}", self.source)
 
 
 class MainWindow(QMainWindow):
@@ -564,7 +553,11 @@ class MainWindow(QMainWindow):
         self.cache = TranslationCache()
         self.last_source_text = ""
         self.translation_history: list[tuple[str, str]] = []
-        self.worker_running = False
+        self.source_worker_running = False
+        self.translation_worker_running = False
+        self.active_translation_source = ""
+        self.translation_queue: list[str] = []
+        self.queued_translation_sources: set[str] = set()
         self._last_seen_signature: Image.Image | None = None
         self._pending_signature: Image.Image | None = None
         self._pending_image: Image.Image | None = None
@@ -575,7 +568,7 @@ class MainWindow(QMainWindow):
         self.overlay.position_changed.connect(self._handle_overlay_dragged)
         self.overlay.size_changed.connect(self._handle_overlay_resized)
         self.thread_pool = QThreadPool(self)
-        self.thread_pool.setMaxThreadCount(1)
+        self.thread_pool.setMaxThreadCount(3)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.process_frame)
 
@@ -946,6 +939,11 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
         self.cache.clear()
         self.last_source_text = ""
+        self.source_worker_running = False
+        self.translation_worker_running = False
+        self.active_translation_source = ""
+        self.translation_queue.clear()
+        self.queued_translation_sources.clear()
         self._reset_detection_state()
         timer_interval_ms = DOM_POLL_INTERVAL_MS if using_dom else AUTO_SCAN_INTERVAL_MS
         self.timer.start(timer_interval_ms)
@@ -982,6 +980,10 @@ class MainWindow(QMainWindow):
 
     def stop(self) -> None:
         self.timer.stop()
+        self.source_worker_running = False
+        self.active_translation_source = ""
+        self.translation_queue.clear()
+        self.queued_translation_sources.clear()
         if self.browser_reader is not None:
             self.browser_reader.close()
             self.browser_reader = None
@@ -998,18 +1000,15 @@ class MainWindow(QMainWindow):
         self.process_screen_frame()
 
     def process_dom_subtitle(self) -> None:
-        if self.worker_running or self.translator is None or self.browser_reader is None:
+        if self.source_worker_running or self.translator is None or self.browser_reader is None:
             return
 
-        self.worker_running = True
+        self.source_worker_running = True
         worker = DomSubtitleProcessor(
             reader=self.browser_reader,
-            translator=self.translator,
-            cache=self.cache,
             previous_text=self.last_source_text,
         )
         worker.signals.source.connect(self._handle_source_detected)
-        worker.signals.result.connect(self._handle_result)
         worker.signals.skipped.connect(self._handle_skipped)
         worker.signals.error.connect(self._handle_error)
         self.thread_pool.start(worker)
@@ -1049,7 +1048,7 @@ class MainWindow(QMainWindow):
                     "initial" if diff is None else f"{diff:.2f}",
                     VISUAL_CHANGE_THRESHOLD,
                 )
-                if self.worker_running:
+                if self.source_worker_running:
                     self.status_label.setText("Subtitle change queued")
                 else:
                     self.status_label.setText("Subtitle change detected")
@@ -1068,7 +1067,7 @@ class MainWindow(QMainWindow):
         if stable_ms < SUBTITLE_STABLE_MS and pending_age_ms < SUBTITLE_MAX_WAIT_MS:
             return
 
-        if self.worker_running:
+        if self.source_worker_running:
             return
 
         worker_image = self._pending_image
@@ -1082,42 +1081,91 @@ class MainWindow(QMainWindow):
         self._pending_signature = None
         self._pending_image = None
 
-        self.worker_running = True
+        self.source_worker_running = True
         worker = FrameProcessor(
             capturer=self.capturer,
             ocr_engine=self.ocr_engine,
-            translator=self.translator,
-            cache=self.cache,
             region=self.region,
             previous_text=self.last_source_text,
             image=worker_image,
         )
         worker.signals.source.connect(self._handle_source_detected)
-        worker.signals.result.connect(self._handle_result)
         worker.signals.skipped.connect(self._handle_skipped)
         worker.signals.error.connect(self._handle_error)
         self.thread_pool.start(worker)
 
     def _handle_source_detected(self, source: str) -> None:
+        self.source_worker_running = False
         self.last_source_text = source
         self.source_text.setPlainText(source)
         self.translation_text.setPlainText(PENDING_TRANSLATION_TEXT)
         self._append_pending_translation_history(source)
         self._show_overlay_history()
-        self.status_label.setText("Source detected - translating")
 
-    def _handle_result(self, source: str, translation: str) -> None:
-        self.worker_running = False
-        self.last_source_text = source
-        self.source_text.setPlainText(source)
-        self.translation_text.setPlainText(translation)
+        cached = self.cache.get(source)
+        if cached is not None:
+            log.info("translation_cache_hit source=%r translation=%r", clip_text(source), clip_text(cached))
+            self._handle_translation_result(source, cached)
+            return
+
+        self._enqueue_translation(source)
+        queue_size = len(self.translation_queue)
+        if self.translation_worker_running and queue_size:
+            self.status_label.setText(f"Source detected - queued for translation ({queue_size})")
+        else:
+            self.status_label.setText("Source detected - translating")
+
+    def _enqueue_translation(self, source: str) -> None:
+        if source == self.active_translation_source or source in self.queued_translation_sources:
+            return
+        self.translation_queue.append(source)
+        self.queued_translation_sources.add(source)
+        self._start_next_translation()
+
+    def _start_next_translation(self) -> None:
+        if self.translation_worker_running or self.translator is None or not self.translation_queue:
+            return
+
+        source = self.translation_queue.pop(0)
+        self.queued_translation_sources.discard(source)
+        self.translation_worker_running = True
+        self.active_translation_source = source
+        worker = TranslationProcessor(self.translator, source)
+        worker.signals.result.connect(self._handle_translation_result)
+        worker.signals.error.connect(self._handle_translation_error)
+        self.thread_pool.start(worker)
+
+    def _handle_translation_result(self, source: str, translation: str) -> None:
+        self.translation_worker_running = False
+        if source == self.active_translation_source:
+            self.active_translation_source = ""
+        self.cache.set(source, translation)
+        if source == self.last_source_text:
+            self.source_text.setPlainText(source)
+            self.translation_text.setPlainText(translation)
         self._complete_translation_history(source, translation)
 
         self._show_overlay_history()
-        self.status_label.setText("Translation updated")
+        if self.translation_queue:
+            self.status_label.setText(f"Translation updated - {len(self.translation_queue)} queued")
+        else:
+            self.status_label.setText("Translation updated")
+        self._start_next_translation()
+
+    def _handle_translation_error(self, message: str, source: str = "") -> None:
+        self.translation_worker_running = False
+        if source == self.active_translation_source:
+            self.active_translation_source = ""
+        if source:
+            if source == self.last_source_text:
+                self.translation_text.setPlainText(FAILED_TRANSLATION_TEXT)
+            self._complete_translation_history(source, FAILED_TRANSLATION_TEXT)
+            self._show_overlay_history()
+        self.status_label.setText(message)
+        self._start_next_translation()
 
     def _handle_skipped(self, text: str) -> None:
-        self.worker_running = False
+        self.source_worker_running = False
         if text:
             self.source_text.setPlainText(text)
             self.status_label.setText("No text change")
@@ -1130,13 +1178,10 @@ class MainWindow(QMainWindow):
                 self.status_label.setText("OCR found no text - check selected region")
 
     def _handle_error(self, message: str, source: str = "") -> None:
-        self.worker_running = False
+        self.source_worker_running = False
         if source:
             self.last_source_text = source
             self.source_text.setPlainText(source)
-            self.translation_text.setPlainText(FAILED_TRANSLATION_TEXT)
-            self._complete_translation_history(source, FAILED_TRANSLATION_TEXT)
-            self._show_overlay_history()
         self.status_label.setText(message)
 
     def _append_pending_translation_history(self, source: str) -> None:
