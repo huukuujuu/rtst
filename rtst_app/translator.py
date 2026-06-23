@@ -31,10 +31,16 @@ class BaseTranslator:
 
 def _subtitle_translation_instructions(source_language: str, target_language: str) -> str:
     return (
-        "You are a subtitle translation engine for a language learner. "
-        f"Translate subtitle text from {source_language} into {target_language}. "
-        "Return only the translated subtitle text. Do not add explanations, labels, "
-        "quotes, source text, romanization, or notes. Keep it natural and concise. "
+        "You are a subtitle localizer for a language learner. "
+        f"Translate the intended meaning of subtitle text from {source_language} "
+        f"into {target_language}. Use fluent, natural subtitle wording, not stiff "
+        "written language or word-for-word translation. Translate idioms, phrasal "
+        "verbs, slang, jokes, and implied meanings by meaning. Preserve the speaker's "
+        "tone, emotion, tense, and level of formality. If the target language is Korean, "
+        "prefer natural spoken Korean that fits real subtitles. Keep it concise enough "
+        "for an overlay, but do not omit important meaning. Return only the translated "
+        "subtitle text. Do not add explanations, labels, quotes, source text, "
+        "romanization, or notes. "
         "If OCR or extracted DOM text is noisy, translate only the readable subtitle-like part. "
         "Ignore obvious player UI such as titles, buttons, menus, timestamps, control labels, "
         "or tooltips if they appear accidentally."

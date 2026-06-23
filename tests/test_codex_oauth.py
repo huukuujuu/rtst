@@ -65,6 +65,11 @@ class CodexOAuthTests(unittest.TestCase):
     def test_translation_instructions_ignore_player_ui_noise(self) -> None:
         instructions = _subtitle_translation_instructions("English", "Korean")
 
+        self.assertIn("subtitle localizer", instructions)
+        self.assertIn("intended meaning", instructions)
+        self.assertIn("word-for-word translation", instructions)
+        self.assertIn("idioms, phrasal", instructions)
+        self.assertIn("natural spoken Korean", instructions)
         self.assertIn("extracted DOM text", instructions)
         self.assertIn("player UI", instructions)
         self.assertIn("titles, buttons, menus", instructions)

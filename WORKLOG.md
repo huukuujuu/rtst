@@ -102,3 +102,7 @@ This file tracks what has been completed so far and what Codex changes while the
   - Replaced the lower-half-only DOM caption band with a full video-height band plus a small tolerance.
   - This allows subtitle elements rendered near the top of the video while keeping horizontal video-overlap and player-control filtering.
   - Added a regression test so the old `videoRect.height * 0.45` lower-bound heuristic does not come back unnoticed.
+- Improvement 12: softened translation style without adding runtime context.
+  - Updated the translation prompt from a generic translation-engine instruction to a subtitle-localizer instruction.
+  - Added explicit guidance to translate idioms, phrasal verbs, slang, jokes, and implied meanings by meaning rather than word-for-word.
+  - Kept the request single-subtitle-only so realtime latency is not increased by extra context.
