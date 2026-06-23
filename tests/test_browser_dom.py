@@ -55,6 +55,7 @@ class BrowserDomTests(unittest.TestCase):
         script = build_subtitle_script()
 
         self.assertIn("isControlUi", script)
+        self.assertIn("stripPlayerUiNoise", script)
         self.assertIn(".ytp-chrome-top", script)
         self.assertIn(".ytp-title", script)
         self.assertIn("captionAreaCandidate", script)
@@ -97,6 +98,22 @@ class BrowserDomTests(unittest.TestCase):
 
     def test_clean_dom_text_does_not_collapse_short_emphasis(self) -> None:
         self.assertEqual(clean_dom_subtitle_text("no no no"), "no no no")
+
+    def test_clean_dom_text_removes_player_settings_ui(self) -> None:
+        self.assertEqual(
+            clean_dom_subtitle_text(
+                ": 4. 애인 만들기 음성 & 자막자막 스타일음성영어자막자막없음영어한국어"
+            ),
+            "",
+        )
+
+    def test_clean_dom_text_keeps_caption_before_player_settings_ui(self) -> None:
+        self.assertEqual(
+            clean_dom_subtitle_text(
+                "Hey, there's the birthday boy. - Hey.: 4. 애인 만들기 음성 & 자막자막 스타일음성영어자막자막없음영어한국어"
+            ),
+            "Hey, there's the birthday boy. - Hey.",
+        )
 
     def test_script_escapes_custom_selector(self) -> None:
         selector = ".caption[data-text=\"a'b\"]"

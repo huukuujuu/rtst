@@ -24,6 +24,19 @@ _MEDIA_PROGRESS_WITH_CHAPTER_AT_END = re.compile(
     + r"(?:\s+(?:Intro|Introduction|Outro|Credits|Chapter\s+\d+))?\s*$",
     re.IGNORECASE,
 )
+_PLAYER_UI_MARKER = re.compile(
+    r"(?:"
+    r"음성\s*&\s*자막|"
+    r"자막\s*스타일|"
+    r"자막\s*없음|자막없음|"
+    r"영어\s*한국어|영어한국어|"
+    r"audio\s*(?:&|and)\s*(?:subtitles|captions)|"
+    r"(?:subtitle|caption)\s*style|"
+    r"(?:subtitles|captions)\s*off"
+    r")",
+    re.IGNORECASE,
+)
+_PLAYER_UI_PREFIX_TAIL = re.compile(r"\s*[:：]\s*\d+\.\s*[^:：]{0,80}$")
 
 DEFAULT_SUBTITLE_SELECTORS = [
     ".ytp-caption-segment",
@@ -415,7 +428,18 @@ def clean_dom_subtitle_text(text: str) -> str:
     cleaned = _MEDIA_PROGRESS_WITH_CHAPTER_AT_END.sub(" ", text)
     cleaned = _MEDIA_PROGRESS_PATTERN.sub(" ", cleaned)
     cleaned = normalize_ocr_text(cleaned)
+    cleaned = _strip_player_ui_noise(cleaned)
     return _collapse_full_word_repetition(cleaned)
+
+
+def _strip_player_ui_noise(text: str) -> str:
+    match = _PLAYER_UI_MARKER.search(text)
+    if match is None:
+        return text
+
+    prefix = text[: match.start()].rstrip()
+    prefix = _PLAYER_UI_PREFIX_TAIL.sub("", prefix)
+    return prefix.strip(" :-_")
 
 
 def _collapse_full_word_repetition(text: str) -> str:
@@ -455,11 +479,22 @@ def build_subtitle_script(subtitle_selector: str = "") -> str:
   }}
 
   function add(parts, seen, value) {{
-    const text = clean(value);
+    const text = stripPlayerUiNoise(clean(value));
     if (!text || seen.has(text)) return;
     if (text.length > 500) return;
     seen.add(text);
     parts.push(text);
+  }}
+
+  function stripPlayerUiNoise(text) {{
+    const marker = /(음성\\s*&\\s*자막|자막\\s*스타일|자막\\s*없음|자막없음|영어\\s*한국어|영어한국어|audio\\s*(?:&|and)\\s*(?:subtitles|captions)|(?:subtitle|caption)\\s*style|(?:subtitles|captions)\\s*off)/i;
+    const match = marker.exec(text);
+    if (!match) return text;
+    return text
+      .slice(0, match.index)
+      .replace(/\\s*[:：]\\s*\\d+\\.\\s*[^:：]{{0,80}}$/, "")
+      .replace(/[:\\-_\\s]+$/, "")
+      .trim();
   }}
 
   function visible(element) {{
@@ -582,6 +617,7 @@ def build_subtitle_script(subtitle_selector: str = "") -> str:
     if (customSelector) return !isControlUi(element);
     if (isControlUi(element)) return false;
     if (hasSubtitleDescendant(element)) return false;
+    if (!stripPlayerUiNoise(element.innerText || element.textContent || "")) return false;
     const tokens = elementTokens(element);
     const captionSignal = /(caption|captions|subtitle|subtitles|timedtext|text-track|texttrack|cue|ytp-caption|vjs-text-track|jw-text-track|aria-live)/i;
     return captionSignal.test(tokens) && captionAreaCandidate(element);

@@ -119,3 +119,7 @@ This file tracks what has been completed so far and what Codex changes while the
   - Added a one-at-a-time translation queue to avoid firing many API requests in parallel.
   - Guarded against stale translation results replacing the latest source text if a newer subtitle has already appeared.
   - Repeated pending entries for the same source are completed together when the translation arrives.
+- Improvement 16: filtered player settings text from DOM subtitles.
+  - Recent logs showed player settings text such as audio/subtitle menu labels being detected as subtitles and taking up to 16.9 seconds to translate.
+  - Added DOM-side and Python-side cleanup for those UI markers.
+  - If real subtitle text appears before a player settings tail, the subtitle prefix is kept and only the UI tail is removed.
