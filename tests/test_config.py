@@ -6,6 +6,13 @@ from rtst_app.config import _coerce_settings
 
 
 class ConfigTests(unittest.TestCase):
+    def test_overlay_defaults_are_compact(self) -> None:
+        settings = _coerce_settings({})
+
+        self.assertEqual(settings.overlay_width, 600)
+        self.assertEqual(settings.overlay_max_height, 600)
+        self.assertEqual(settings.overlay_font_size, 15)
+
     def test_overlay_manual_position_is_preserved(self) -> None:
         settings = _coerce_settings(
             {

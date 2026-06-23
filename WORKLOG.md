@@ -110,3 +110,7 @@ This file tracks what has been completed so far and what Codex changes while the
   - Added a source-detected worker signal so the UI can render the original subtitle immediately after OCR/DOM extraction.
   - History and overlay entries now start as pending source entries and are completed in place when the translation arrives.
   - Pending overlay entries show the source text even when the normal source-display option is off, then switch back to the configured display once translated.
+- Improvement 14: adjusted compact overlay defaults.
+  - Changed default overlay width and height to 600 px.
+  - Changed default overlay font size to 15 px.
+  - Added a config regression test for the compact defaults.

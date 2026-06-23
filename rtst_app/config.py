@@ -56,10 +56,10 @@ class AppSettings:
     oauth_client_id: str = "rtst-desktop"
     oauth_scope: str = "translate"
     overlay_enabled: bool = True
-    overlay_font_size: int = 28
+    overlay_font_size: int = 15
     overlay_opacity: float = 0.9
-    overlay_width: int = 720
-    overlay_max_height: int = 420
+    overlay_width: int = 600
+    overlay_max_height: int = 600
     overlay_position: str = "auto"
     overlay_offset_x: int = 0
     overlay_offset_y: int = 0
