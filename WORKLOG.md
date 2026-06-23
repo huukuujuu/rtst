@@ -94,3 +94,7 @@ This file tracks what has been completed so far and what Codex changes while the
   - Replaced the overlay's static label with a read-only scrollable text panel.
   - New translations still scroll the overlay to the newest entry, but older entries remain reachable by scrolling inside the overlay panel.
   - Kept direct resizing through the bottom-right size grip.
+- Improvement 10: changed the overlay to show the full retained translation history.
+  - Removed the `Overlay history` UI limit.
+  - The overlay now renders every entry retained by `translation_history`, matching the History tab's current retention window.
+  - `History > Max` is the single control for how much history is retained overall.

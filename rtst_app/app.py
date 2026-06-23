@@ -614,10 +614,6 @@ class MainWindow(QMainWindow):
         self.overlay_offset_y_spin = QSpinBox()
         self.overlay_offset_y_spin.setRange(-1000, 1000)
         self.overlay_offset_y_spin.setSuffix(" px")
-        self.overlay_history_limit_spin = QSpinBox()
-        self.overlay_history_limit_spin.setRange(1, 12)
-        self.overlay_history_limit_spin.setSuffix(" items")
-
         self.show_original_check = QCheckBox("Show source text")
 
         self.source_text = QTextEdit()
@@ -698,7 +694,6 @@ class MainWindow(QMainWindow):
         overlay_form.addRow("Overlay position", self.overlay_position_combo)
         overlay_form.addRow("Overlay X offset", self.overlay_offset_x_spin)
         overlay_form.addRow("Overlay Y offset", self.overlay_offset_y_spin)
-        overlay_form.addRow("Overlay history", self.overlay_history_limit_spin)
         overlay_form.addRow("", self.show_original_check)
         tabs.addTab(overlay_tab, "Overlay")
 
@@ -724,7 +719,6 @@ class MainWindow(QMainWindow):
         self.overlay_position_combo.currentTextChanged.connect(self._preview_overlay_position)
         self.overlay_offset_x_spin.valueChanged.connect(self._preview_overlay_position)
         self.overlay_offset_y_spin.valueChanged.connect(self._preview_overlay_position)
-        self.overlay_history_limit_spin.valueChanged.connect(self._refresh_overlay_history)
 
         self.resize(680, 560)
 
@@ -749,7 +743,6 @@ class MainWindow(QMainWindow):
         self.overlay_position_combo.setCurrentText(self.settings.overlay_position)
         self.overlay_offset_x_spin.setValue(self.settings.overlay_offset_x)
         self.overlay_offset_y_spin.setValue(self.settings.overlay_offset_y)
-        self.overlay_history_limit_spin.setValue(self.settings.overlay_history_limit)
         self.translation_history_limit_spin.setValue(self.settings.translation_history_limit)
         self.show_original_check.setChecked(self.settings.show_original)
         self._handle_source_changed(self.source_combo.currentText())
@@ -782,7 +775,6 @@ class MainWindow(QMainWindow):
             overlay_offset_x=self.overlay_offset_x_spin.value(),
             overlay_offset_y=self.overlay_offset_y_spin.value(),
             overlay_accumulate=True,
-            overlay_history_limit=self.overlay_history_limit_spin.value(),
             translation_history_limit=self.translation_history_limit_spin.value(),
             show_original=self.show_original_check.isChecked(),
         )
@@ -1152,11 +1144,8 @@ class MainWindow(QMainWindow):
         if not history:
             return ""
 
-        limit = max(1, self.settings.overlay_history_limit)
-        recent = history[-limit:]
         blocks: list[str] = []
-        first_index = len(history) - len(recent) + 1
-        for index, (source, translation) in enumerate(recent, start=first_index):
+        for index, (source, translation) in enumerate(history, start=1):
             source_html = escape(source).replace("\n", "<br>")
             translation_html = escape(translation).replace("\n", "<br>")
             source_block = ""
