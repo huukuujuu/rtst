@@ -48,7 +48,7 @@ Copy-Item .env.example .env
 OPENAI_MODEL=gpt-5-mini
 RTST_CODEX_BASE_URL=https://chatgpt.com/backend-api
 RTST_CODEX_MODEL=gpt-5.5
-RTST_CODEX_REASONING_EFFORT=low
+RTST_CODEX_REASONING_EFFORT=off
 RTST_CODEX_REASONING_SUMMARY=auto
 RTST_CODEX_OAUTH_AUTH_URL=https://auth.openai.com/oauth/authorize
 RTST_CODEX_OAUTH_TOKEN_URL=https://auth.openai.com/oauth/token
@@ -65,6 +65,7 @@ RTST_VISUAL_CHANGE_THRESHOLD=1.5
 RTST_SAVE_LAST_CAPTURE=1
 RTST_LAST_CAPTURE_PATH=rtst_last_capture.png
 RTST_DOM_POLL_INTERVAL_MS=250
+RTST_TRANSLATION_CONCURRENCY=2
 RTST_BROWSER_DEBUG_URL=http://127.0.0.1:9222
 RTST_BROWSER_TAB_FILTER=
 RTST_BROWSER_SUBTITLE_SELECTOR=
@@ -73,7 +74,9 @@ RTST_BROWSER_SUBTITLE_SELECTOR=
 로그인 토큰은 `rtst_codex_oauth_token.json`에 저장됩니다. 문제가 있으면 앱에서 `Clear OAuth token`을 누르거나 해당 파일을 삭제한 뒤 다시 로그인하세요.
 
 `RTST_CODEX_MAX_OUTPUT_TOKENS`는 기본으로 보내지 않습니다. 일부 Codex 백엔드 모델이 이 파라미터를 거부하기 때문입니다.
+`RTST_CODEX_REASONING_EFFORT=off`는 기본으로 reasoning 파라미터를 보내지 않아 실시간 번역 지연을 줄입니다.
 `RTST_CODEX_REASONING_SUMMARY`는 `auto`, `concise`, `detailed` 중 하나여야 합니다.
+`RTST_TRANSLATION_CONCURRENCY`는 번역 요청을 몇 개까지 병렬로 진행할지 정합니다. 기본값 2는 자막이 빠르게 바뀌어도 번역을 버리지 않고 대기열에 남기는 구성입니다.
 
 ## 로그 확인
 

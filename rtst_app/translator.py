@@ -31,19 +31,14 @@ class BaseTranslator:
 
 def _subtitle_translation_instructions(source_language: str, target_language: str) -> str:
     return (
-        "You are a subtitle localizer for a language learner. "
-        f"Translate the intended meaning of subtitle text from {source_language} "
-        f"into {target_language}. Use fluent, natural subtitle wording, not stiff "
-        "written language or word-for-word translation. Translate idioms, phrasal "
-        "verbs, slang, jokes, and implied meanings by meaning. Preserve the speaker's "
-        "tone, emotion, tense, and level of formality. If the target language is Korean, "
-        "prefer natural spoken Korean that fits real subtitles. Keep it concise enough "
-        "for an overlay, but do not omit important meaning. Return only the translated "
-        "subtitle text. Do not add explanations, labels, quotes, source text, "
-        "romanization, or notes. "
-        "If OCR or extracted DOM text is noisy, translate only the readable subtitle-like part. "
-        "Ignore obvious player UI such as titles, buttons, menus, timestamps, control labels, "
-        "or tooltips if they appear accidentally."
+        "You are a subtitle localizer. "
+        f"Translate the intended meaning from {source_language} into {target_language}. "
+        "Use short, natural spoken Korean for Korean output. Avoid stiff or "
+        "word-for-word translation. Translate idioms, phrasal verbs, slang, and jokes "
+        "by meaning. Return only the translated subtitle text. No notes, labels, "
+        "quotes, source text, or romanization. If OCR or extracted DOM text is noisy, "
+        "translate only the readable subtitle-like part. Ignore obvious player UI "
+        "such as titles, buttons, menus, timestamps, and controls."
     )
 
 
@@ -299,7 +294,7 @@ def _env_optional_int(name: str) -> int | None:
 
 
 def _codex_reasoning_effort_from_env() -> str:
-    raw = os.getenv("RTST_CODEX_REASONING_EFFORT", "low").strip().lower()
+    raw = os.getenv("RTST_CODEX_REASONING_EFFORT", "off").strip().lower()
     if raw in {"", "0", "false", "no", "off"}:
         return ""
     aliases = {

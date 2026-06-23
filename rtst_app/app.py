@@ -103,6 +103,7 @@ SUBTITLE_STABLE_MS = _env_int("RTST_SUBTITLE_STABLE_MS", 220, 80, 1500)
 SUBTITLE_MAX_WAIT_MS = _env_int("RTST_SUBTITLE_MAX_WAIT_MS", 850, 250, 4000)
 VISUAL_CHANGE_THRESHOLD = _env_float("RTST_VISUAL_CHANGE_THRESHOLD", 1.5, 0.1, 40.0)
 DOM_POLL_INTERVAL_MS = _env_int("RTST_DOM_POLL_INTERVAL_MS", 250, 100, 2000)
+TRANSLATION_CONCURRENCY = _env_int("RTST_TRANSLATION_CONCURRENCY", 2, 1, 6)
 
 
 def _env_enabled(name: str, default: bool = True) -> bool:
@@ -554,8 +555,7 @@ class MainWindow(QMainWindow):
         self.last_source_text = ""
         self.translation_history: list[tuple[str, str]] = []
         self.source_worker_running = False
-        self.translation_worker_running = False
-        self.active_translation_source = ""
+        self.active_translation_sources: set[str] = set()
         self.translation_queue: list[str] = []
         self.queued_translation_sources: set[str] = set()
         self._last_seen_signature: Image.Image | None = None
@@ -568,7 +568,7 @@ class MainWindow(QMainWindow):
         self.overlay.position_changed.connect(self._handle_overlay_dragged)
         self.overlay.size_changed.connect(self._handle_overlay_resized)
         self.thread_pool = QThreadPool(self)
-        self.thread_pool.setMaxThreadCount(3)
+        self.thread_pool.setMaxThreadCount(TRANSLATION_CONCURRENCY + 1)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.process_frame)
 
@@ -940,8 +940,7 @@ class MainWindow(QMainWindow):
         self.cache.clear()
         self.last_source_text = ""
         self.source_worker_running = False
-        self.translation_worker_running = False
-        self.active_translation_source = ""
+        self.active_translation_sources.clear()
         self.translation_queue.clear()
         self.queued_translation_sources.clear()
         self._reset_detection_state()
@@ -981,7 +980,7 @@ class MainWindow(QMainWindow):
     def stop(self) -> None:
         self.timer.stop()
         self.source_worker_running = False
-        self.active_translation_source = ""
+        self.active_translation_sources.clear()
         self.translation_queue.clear()
         self.queued_translation_sources.clear()
         if self.browser_reader is not None:
@@ -1110,35 +1109,46 @@ class MainWindow(QMainWindow):
 
         self._enqueue_translation(source)
         queue_size = len(self.translation_queue)
-        if self.translation_worker_running and queue_size:
+        if self.active_translation_sources and queue_size:
             self.status_label.setText(f"Source detected - queued for translation ({queue_size})")
         else:
             self.status_label.setText("Source detected - translating")
 
     def _enqueue_translation(self, source: str) -> None:
-        if source == self.active_translation_source or source in self.queued_translation_sources:
+        if source in self.active_translation_sources or source in self.queued_translation_sources:
+            log.info("translation_already_pending source=%r", clip_text(source))
             return
         self.translation_queue.append(source)
         self.queued_translation_sources.add(source)
+        log.info(
+            "translation_queued active=%s queue_size=%s source=%r",
+            len(self.active_translation_sources),
+            len(self.translation_queue),
+            clip_text(source),
+        )
         self._start_next_translation()
 
     def _start_next_translation(self) -> None:
-        if self.translation_worker_running or self.translator is None or not self.translation_queue:
+        if self.translator is None:
             return
 
-        source = self.translation_queue.pop(0)
-        self.queued_translation_sources.discard(source)
-        self.translation_worker_running = True
-        self.active_translation_source = source
-        worker = TranslationProcessor(self.translator, source)
-        worker.signals.result.connect(self._handle_translation_result)
-        worker.signals.error.connect(self._handle_translation_error)
-        self.thread_pool.start(worker)
+        while self.translation_queue and len(self.active_translation_sources) < TRANSLATION_CONCURRENCY:
+            source = self.translation_queue.pop(0)
+            self.queued_translation_sources.discard(source)
+            self.active_translation_sources.add(source)
+            log.info(
+                "translation_worker_started active=%s queue_size=%s source=%r",
+                len(self.active_translation_sources),
+                len(self.translation_queue),
+                clip_text(source),
+            )
+            worker = TranslationProcessor(self.translator, source)
+            worker.signals.result.connect(self._handle_translation_result)
+            worker.signals.error.connect(self._handle_translation_error)
+            self.thread_pool.start(worker)
 
     def _handle_translation_result(self, source: str, translation: str) -> None:
-        self.translation_worker_running = False
-        if source == self.active_translation_source:
-            self.active_translation_source = ""
+        self.active_translation_sources.discard(source)
         self.cache.set(source, translation)
         if source == self.last_source_text:
             self.source_text.setPlainText(source)
@@ -1153,9 +1163,7 @@ class MainWindow(QMainWindow):
         self._start_next_translation()
 
     def _handle_translation_error(self, message: str, source: str = "") -> None:
-        self.translation_worker_running = False
-        if source == self.active_translation_source:
-            self.active_translation_source = ""
+        self.active_translation_sources.discard(source)
         if source:
             if source == self.last_source_text:
                 self.translation_text.setPlainText(FAILED_TRANSLATION_TEXT)

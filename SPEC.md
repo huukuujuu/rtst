@@ -77,7 +77,7 @@ OPENAI_MODEL=gpt-5-mini
 
 RTST_CODEX_BASE_URL=https://chatgpt.com/backend-api
 RTST_CODEX_MODEL=gpt-5.5
-RTST_CODEX_REASONING_EFFORT=low
+RTST_CODEX_REASONING_EFFORT=off
 RTST_CODEX_REASONING_SUMMARY=auto
 RTST_CODEX_OAUTH_AUTH_URL=https://auth.openai.com/oauth/authorize
 RTST_CODEX_OAUTH_TOKEN_URL=https://auth.openai.com/oauth/token
@@ -94,6 +94,7 @@ RTST_VISUAL_CHANGE_THRESHOLD=1.5
 RTST_SAVE_LAST_CAPTURE=1
 RTST_LAST_CAPTURE_PATH=rtst_last_capture.png
 RTST_DOM_POLL_INTERVAL_MS=250
+RTST_TRANSLATION_CONCURRENCY=2
 RTST_BROWSER_DEBUG_URL=http://127.0.0.1:9222
 RTST_BROWSER_TAB_FILTER=
 RTST_BROWSER_SUBTITLE_SELECTOR=
@@ -107,8 +108,9 @@ OCR 입력 진단을 위해 마지막 OCR 대상 이미지를 `rtst_last_capture
 자막 변화 감지는 UI 설정이 아니라 내부 자동 동작이다. 기본 스캔 주기는 120ms이며, OCR은 매 스캔마다 실행하지 않고 `RTST_SUBTITLE_STABLE_MS` 또는 `RTST_SUBTITLE_MAX_WAIT_MS` 조건을 만족하는 최신 프레임에 대해서만 실행한다.
 
 `max_output_tokens`는 Codex OAuth 기본 요청에서 제외한다. 일부 ChatGPT/Codex 백엔드 모델이 해당 파라미터를 거부하기 때문이다.
-`reasoning.effort`는 기본 `low`를 사용하며, 이전 설정값인 `minimal`은 `low`로 자동 매핑한다.
+`reasoning.effort`는 기본 `off`로 보내지 않는다. 이전 설정값인 `minimal`은 `low`로 자동 매핑한다.
 `reasoning.summary`는 Codex 백엔드 허용값인 `auto`, `concise`, `detailed`만 사용한다.
+`RTST_TRANSLATION_CONCURRENCY`는 번역 요청을 병렬로 처리할 최대 개수다. 기본값은 2이며, 자막이 빠르게 바뀌어도 새 원문을 즉시 표시하고 모든 번역 대상은 대기열에 남긴다.
 
 ## 6. 아키텍처
 

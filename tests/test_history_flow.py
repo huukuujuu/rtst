@@ -10,12 +10,22 @@ from PySide6.QtWidgets import QApplication
 from rtst_app.app import (
     PENDING_TRANSLATION_TEXT,
     MainWindow,
+    TRANSLATION_CONCURRENCY,
     append_pending_history_entry,
     complete_history_entry,
 )
+from rtst_app.translator import MockTranslator
 
 
 _APP: QApplication | None = None
+
+
+class FakeThreadPool:
+    def __init__(self) -> None:
+        self.workers: list[object] = []
+
+    def start(self, worker: object) -> None:
+        self.workers.append(worker)
 
 
 def _qapp() -> QApplication:
@@ -78,6 +88,24 @@ class HistoryFlowTests(unittest.TestCase):
             window.translation_history,
             [("First subtitle", "첫 번째 자막"), ("Second subtitle", "")],
         )
+        window.stop()
+        window.deleteLater()
+
+    def test_translation_queue_starts_limited_workers_without_dropping_sources(self) -> None:
+        _qapp()
+        window = MainWindow()
+        fake_pool = FakeThreadPool()
+        window.thread_pool = fake_pool  # type: ignore[assignment]
+        window.translator = MockTranslator()
+        sources = [f"Line {index}" for index in range(TRANSLATION_CONCURRENCY + 2)]
+
+        for source in sources:
+            window._enqueue_translation(source)
+
+        self.assertEqual(len(fake_pool.workers), TRANSLATION_CONCURRENCY)
+        self.assertEqual(window.active_translation_sources, set(sources[:TRANSLATION_CONCURRENCY]))
+        self.assertEqual(window.translation_queue, sources[TRANSLATION_CONCURRENCY:])
+        self.assertEqual(window.queued_translation_sources, set(sources[TRANSLATION_CONCURRENCY:]))
         window.stop()
         window.deleteLater()
 

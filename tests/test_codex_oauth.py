@@ -49,10 +49,10 @@ class CodexOAuthTests(unittest.TestCase):
             "https://chatgpt.com/backend-api/codex/responses",
         )
 
-    def test_codex_reasoning_effort_defaults_to_low(self) -> None:
+    def test_codex_reasoning_effort_defaults_to_off(self) -> None:
         env = {key: value for key, value in os.environ.items() if key != "RTST_CODEX_REASONING_EFFORT"}
         with patch.dict(os.environ, env, clear=True):
-            self.assertEqual(_codex_reasoning_effort_from_env(), "low")
+            self.assertEqual(_codex_reasoning_effort_from_env(), "")
 
     def test_codex_reasoning_effort_maps_minimal_to_low(self) -> None:
         with patch.dict(os.environ, {"RTST_CODEX_REASONING_EFFORT": "minimal"}):

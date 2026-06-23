@@ -115,6 +115,35 @@ class BrowserDomTests(unittest.TestCase):
             "Hey, there's the birthday boy. - Hey.",
         )
 
+    def test_clean_dom_text_removes_numbered_mojibake_ui_tail(self) -> None:
+        title_tail = "애인 만들기".encode("utf-8").decode("latin-1")
+
+        self.assertEqual(clean_dom_subtitle_text(f": 4. {title_tail}"), "")
+        self.assertEqual(
+            clean_dom_subtitle_text(f"All right. Maybe it will take my mind off it.: 4. {title_tail}"),
+            "All right. Maybe it will take my mind off it.",
+        )
+
+    def test_clean_dom_text_removes_numbered_mojibake_ui_tail_with_language(self) -> None:
+        title_tail = "애인 만들기 영어".encode("utf-8").decode("latin-1")
+
+        self.assertEqual(
+            clean_dom_subtitle_text(
+                f"There was a cave-in in one of the mines, and eight people were killed.: 4. {title_tail}"
+            ),
+            "There was a cave-in in one of the mines, and eight people were killed.",
+        )
+
+    def test_clean_dom_text_removes_trailing_language_ui_tail(self) -> None:
+        self.assertEqual(clean_dom_subtitle_text("Wait. 영어"), "Wait.")
+        self.assertEqual(
+            clean_dom_subtitle_text("Did you say G. Stephanopoulos? 영어"),
+            "Did you say G. Stephanopoulos?",
+        )
+
+    def test_clean_dom_text_keeps_standalone_language_word(self) -> None:
+        self.assertEqual(clean_dom_subtitle_text("영어"), "영어")
+
     def test_script_escapes_custom_selector(self) -> None:
         selector = ".caption[data-text=\"a'b\"]"
 

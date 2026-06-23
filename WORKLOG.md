@@ -123,3 +123,9 @@ This file tracks what has been completed so far and what Codex changes while the
   - Recent logs showed player settings text such as audio/subtitle menu labels being detected as subtitles and taking up to 16.9 seconds to translate.
   - Added DOM-side and Python-side cleanup for those UI markers.
   - If real subtitle text appears before a player settings tail, the subtitle prefix is kept and only the UI tail is removed.
+- Improvement 17: reduced translation backlog without dropping subtitles.
+  - Recent logs still showed numbered player title tails such as `: 4. ...` being mixed into otherwise valid subtitles, so DOM cleanup now strips those short numbered UI tails when they look like player/title text.
+  - Added another DOM cleanup guard for trailing language labels such as `영어` when they appear after an otherwise complete English subtitle.
+  - Kept every unique subtitle queued for translation instead of skipping older pending work.
+  - Added a configurable translation concurrency limit with a default of 2 workers so fast subtitle changes can keep rendering source text while translations finish in parallel.
+  - Disabled Codex reasoning by default and shortened the subtitle-localization prompt to favor lower latency while keeping natural Korean and idiom-by-meaning instructions.

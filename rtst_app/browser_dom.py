@@ -37,6 +37,20 @@ _PLAYER_UI_MARKER = re.compile(
     re.IGNORECASE,
 )
 _PLAYER_UI_PREFIX_TAIL = re.compile(r"\s*[:：]\s*\d+\.\s*[^:：]{0,80}$")
+_NUMBERED_PLAYER_UI_TAIL = re.compile(r"\s*[:：]\s*\d+\.\s*(?P<tail>[^:：]{1,120})$")
+_LANGUAGE_UI_TAILS = ("영어", "한국어", "일본어", "중국어")
+_TRAILING_LANGUAGE_UI_TAIL = re.compile(
+    r"\s+(?P<tail>"
+    + "|".join(
+        re.escape(tail)
+        for tail in (
+            *_LANGUAGE_UI_TAILS,
+            *(tail.encode("utf-8").decode("latin-1") for tail in _LANGUAGE_UI_TAILS),
+        )
+    )
+    + r")\s*$",
+    re.IGNORECASE,
+)
 
 DEFAULT_SUBTITLE_SELECTORS = [
     ".ytp-caption-segment",
@@ -434,12 +448,43 @@ def clean_dom_subtitle_text(text: str) -> str:
 
 def _strip_player_ui_noise(text: str) -> str:
     match = _PLAYER_UI_MARKER.search(text)
-    if match is None:
-        return text
+    if match is not None:
+        prefix = text[: match.start()].rstrip()
+        prefix = _PLAYER_UI_PREFIX_TAIL.sub("", prefix)
+        return prefix.strip(" :-_")
 
-    prefix = text[: match.start()].rstrip()
-    prefix = _PLAYER_UI_PREFIX_TAIL.sub("", prefix)
-    return prefix.strip(" :-_")
+    tail_match = _NUMBERED_PLAYER_UI_TAIL.search(text)
+    if tail_match is not None and _looks_like_player_ui_tail(tail_match.group("tail")):
+        prefix = text[: tail_match.start()].rstrip()
+        return prefix.strip(" :-_")
+
+    language_tail_match = _TRAILING_LANGUAGE_UI_TAIL.search(text)
+    if language_tail_match is None:
+        return text
+    prefix = text[: language_tail_match.start()].rstrip()
+    if not _looks_like_subtitle_prefix_before_ui_tail(prefix):
+        return text
+    return prefix.strip()
+
+
+def _looks_like_player_ui_tail(tail: str) -> bool:
+    if _PLAYER_UI_MARKER.search(tail):
+        return True
+
+    compact = re.sub(r"\s+", "", tail)
+    if not compact or len(compact) > 90:
+        return False
+
+    hangul_count = sum(1 for char in compact if "\uac00" <= char <= "\ud7a3")
+    mojibake_count = sum(1 for char in compact if 0x80 <= ord(char) <= 0xFF)
+    return hangul_count >= 2 or mojibake_count >= 2
+
+
+def _looks_like_subtitle_prefix_before_ui_tail(prefix: str) -> bool:
+    stripped = prefix.strip()
+    if not stripped or not re.search(r"[A-Za-z]", stripped):
+        return False
+    return bool(re.search(r"[.!?\"')\]]$", stripped))
 
 
 def _collapse_full_word_repetition(text: str) -> str:
@@ -489,12 +534,39 @@ def build_subtitle_script(subtitle_selector: str = "") -> str:
   function stripPlayerUiNoise(text) {{
     const marker = /(음성\\s*&\\s*자막|자막\\s*스타일|자막\\s*없음|자막없음|영어\\s*한국어|영어한국어|audio\\s*(?:&|and)\\s*(?:subtitles|captions)|(?:subtitle|caption)\\s*style|(?:subtitles|captions)\\s*off)/i;
     const match = marker.exec(text);
-    if (!match) return text;
-    return text
-      .slice(0, match.index)
-      .replace(/\\s*[:：]\\s*\\d+\\.\\s*[^:：]{{0,80}}$/, "")
-      .replace(/[:\\-_\\s]+$/, "")
-      .trim();
+    if (match) {{
+      return text
+        .slice(0, match.index)
+        .replace(/\\s*[:：]\\s*\\d+\\.\\s*[^:：]{{0,80}}$/, "")
+        .replace(/[:\\-_\\s]+$/, "")
+        .trim();
+    }}
+
+    const tailMatch = /\\s*[:：]\\s*\\d+\\.\\s*([^:：]{{1,120}})$/.exec(text);
+    if (tailMatch && looksLikePlayerUiTail(tailMatch[1])) {{
+      return text.slice(0, tailMatch.index).replace(/[:\\-_\\s]+$/, "").trim();
+    }}
+
+    const languageTailMatch = /\\s+(영어|한국어|일본어|중국어)\\s*$/i.exec(text);
+    if (!languageTailMatch) return text;
+    const prefix = text.slice(0, languageTailMatch.index).trim();
+    if (!looksLikeSubtitlePrefixBeforeUiTail(prefix)) return text;
+    return prefix;
+  }}
+
+  function looksLikePlayerUiTail(tail) {{
+    if (/(음성\\s*&\\s*자막|자막\\s*스타일|자막\\s*없음|자막없음|영어\\s*한국어|영어한국어|audio\\s*(?:&|and)\\s*(?:subtitles|captions)|(?:subtitle|caption)\\s*style|(?:subtitles|captions)\\s*off)/i.test(tail)) return true;
+    const compact = String(tail || "").replace(/\\s+/g, "");
+    if (!compact || compact.length > 90) return false;
+    const hangul = compact.match(/[가-힣]/g) || [];
+    const mojibake = compact.match(/[\\u0080-\\u00ff]/g) || [];
+    return hangul.length >= 2 || mojibake.length >= 2;
+  }}
+
+  function looksLikeSubtitlePrefixBeforeUiTail(prefix) {{
+    const text = String(prefix || "").trim();
+    if (!text || !/[A-Za-z]/.test(text)) return false;
+    return /[.!?"')\\]]$/.test(text);
   }}
 
   function visible(element) {{
