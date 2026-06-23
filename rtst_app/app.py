@@ -47,6 +47,37 @@ from rtst_app.translator import BaseTranslator, TranslationError, build_translat
 
 log = get_logger("app")
 
+HistoryEntry = tuple[str, str]
+PENDING_TRANSLATION_TEXT = "Translating..."
+FAILED_TRANSLATION_TEXT = "Translation failed"
+
+
+def append_pending_history_entry(history: list[HistoryEntry], source: str) -> bool:
+    if not source.strip():
+        return False
+    if history and history[-1][0] == source:
+        return False
+    history.append((source, ""))
+    return True
+
+
+def complete_history_entry(
+    history: list[HistoryEntry],
+    source: str,
+    translation: str,
+) -> bool:
+    if not source.strip() or not translation.strip():
+        return False
+    for index in range(len(history) - 1, -1, -1):
+        entry_source, entry_translation = history[index]
+        if entry_source == source and not entry_translation.strip():
+            history[index] = (source, translation)
+            return True
+    if history and history[-1] == (source, translation):
+        return False
+    history.append((source, translation))
+    return True
+
 
 def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
     try:
@@ -380,6 +411,7 @@ class OverlayWindow(QWidget):
 
 
 class FrameSignals(QObject):
+    source = Signal(str)
     result = Signal(str, str)
     skipped = Signal(str)
     error = Signal(str, str)
@@ -433,6 +465,7 @@ class FrameProcessor(QRunnable):
                 self.signals.skipped.emit(text)
                 return
 
+            self.signals.source.emit(text)
             cached = self.cache.get(text)
             if cached is not None:
                 log.info("frame_cache_hit text=%r translation=%r", clip_text(text), clip_text(cached))
@@ -488,6 +521,7 @@ class DomSubtitleProcessor(QRunnable):
                 self.signals.skipped.emit(text)
                 return
 
+            self.signals.source.emit(text)
             cached = self.cache.get(text)
             if cached is not None:
                 log.info("dom_source_cache_hit text=%r translation=%r", clip_text(text), clip_text(cached))
@@ -974,6 +1008,7 @@ class MainWindow(QMainWindow):
             cache=self.cache,
             previous_text=self.last_source_text,
         )
+        worker.signals.source.connect(self._handle_source_detected)
         worker.signals.result.connect(self._handle_result)
         worker.signals.skipped.connect(self._handle_skipped)
         worker.signals.error.connect(self._handle_error)
@@ -1057,17 +1092,26 @@ class MainWindow(QMainWindow):
             previous_text=self.last_source_text,
             image=worker_image,
         )
+        worker.signals.source.connect(self._handle_source_detected)
         worker.signals.result.connect(self._handle_result)
         worker.signals.skipped.connect(self._handle_skipped)
         worker.signals.error.connect(self._handle_error)
         self.thread_pool.start(worker)
+
+    def _handle_source_detected(self, source: str) -> None:
+        self.last_source_text = source
+        self.source_text.setPlainText(source)
+        self.translation_text.setPlainText(PENDING_TRANSLATION_TEXT)
+        self._append_pending_translation_history(source)
+        self._show_overlay_history()
+        self.status_label.setText("Source detected - translating")
 
     def _handle_result(self, source: str, translation: str) -> None:
         self.worker_running = False
         self.last_source_text = source
         self.source_text.setPlainText(source)
         self.translation_text.setPlainText(translation)
-        self._append_translation_history(source, translation)
+        self._complete_translation_history(source, translation)
 
         self._show_overlay_history()
         self.status_label.setText("Translation updated")
@@ -1090,12 +1134,20 @@ class MainWindow(QMainWindow):
         if source:
             self.last_source_text = source
             self.source_text.setPlainText(source)
+            self.translation_text.setPlainText(FAILED_TRANSLATION_TEXT)
+            self._complete_translation_history(source, FAILED_TRANSLATION_TEXT)
+            self._show_overlay_history()
         self.status_label.setText(message)
 
-    def _append_translation_history(self, source: str, translation: str) -> None:
-        if self.translation_history and self.translation_history[-1] == (source, translation):
+    def _append_pending_translation_history(self, source: str) -> None:
+        if not append_pending_history_entry(self.translation_history, source):
             return
-        self.translation_history.append((source, translation))
+        self._trim_translation_history(render=False)
+        self._render_translation_history()
+
+    def _complete_translation_history(self, source: str, translation: str) -> None:
+        if not complete_history_entry(self.translation_history, source, translation):
+            return
         self._trim_translation_history(render=False)
         self._render_translation_history()
 
@@ -1120,8 +1172,15 @@ class MainWindow(QMainWindow):
 
         blocks: list[str] = []
         for index, (source, translation) in enumerate(self.translation_history, start=1):
+            pending = not translation.strip()
             source_html = escape(source).replace("\n", "<br>")
-            translation_html = escape(translation).replace("\n", "<br>")
+            translation_text = translation if not pending else PENDING_TRANSLATION_TEXT
+            translation_html = escape(translation_text).replace("\n", "<br>")
+            translation_label = "Translation" if not pending else "Translation pending"
+            translation_background = "#dcfce7" if not pending else "#f3f4f6"
+            translation_color = "#052e16" if not pending else "#6b7280"
+            translation_weight = "600" if not pending else "500"
+            translation_style = "normal" if not pending else "italic"
             blocks.append(
                 f"""
                 <div style="margin: 10px 0 14px 0;">
@@ -1129,8 +1188,8 @@ class MainWindow(QMainWindow):
                   <div style="background: #eef2ff; color: #111827; border-radius: 8px; padding: 8px 10px; margin: 3px 36px 6px 0;">
                     {source_html}
                   </div>
-                  <div style="color: #6b7280; font-size: 11px; text-align: right;">Translation</div>
-                  <div style="background: #dcfce7; color: #052e16; border-radius: 8px; padding: 8px 10px; margin: 3px 0 0 36px;">
+                  <div style="color: #6b7280; font-size: 11px; text-align: right;">{translation_label}</div>
+                  <div style="background: {translation_background}; color: {translation_color}; border-radius: 8px; padding: 8px 10px; margin: 3px 0 0 36px; font-weight: {translation_weight}; font-style: {translation_style};">
                     {translation_html}
                   </div>
                 </div>
@@ -1146,20 +1205,26 @@ class MainWindow(QMainWindow):
 
         blocks: list[str] = []
         for index, (source, translation) in enumerate(history, start=1):
+            pending = not translation.strip()
             source_html = escape(source).replace("\n", "<br>")
-            translation_html = escape(translation).replace("\n", "<br>")
+            translation_text = translation if not pending else PENDING_TRANSLATION_TEXT
+            translation_html = escape(translation_text).replace("\n", "<br>")
             source_block = ""
-            if self.settings.show_original and source.strip():
+            if (self.settings.show_original or pending) and source.strip():
                 source_block = (
                     "<div style='color:#bfdbfe; font-size:0.78em; line-height:1.25; "
                     f"margin-bottom:4px;'>{source_html}</div>"
                 )
+            translation_style = (
+                "color:#d1d5db; font-weight:500; font-style:italic; line-height:1.3;"
+                if pending
+                else "color:#ffffff; font-weight:600; line-height:1.3;"
+            )
             blocks.append(
                 "<div style='margin-bottom:10px;'>"
                 f"<div style='color:#9ca3af; font-size:0.66em;'>#{index}</div>"
                 f"{source_block}"
-                "<div style='color:#ffffff; font-weight:600; line-height:1.3;'>"
-                f"{translation_html}</div>"
+                f"<div style='{translation_style}'>{translation_html}</div>"
                 "</div>"
             )
         return "".join(blocks)

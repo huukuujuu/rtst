@@ -106,3 +106,7 @@ This file tracks what has been completed so far and what Codex changes while the
   - Updated the translation prompt from a generic translation-engine instruction to a subtitle-localizer instruction.
   - Added explicit guidance to translate idioms, phrasal verbs, slang, jokes, and implied meanings by meaning rather than word-for-word.
   - Kept the request single-subtitle-only so realtime latency is not increased by extra context.
+- Improvement 13: show subtitle source text before translation completes.
+  - Added a source-detected worker signal so the UI can render the original subtitle immediately after OCR/DOM extraction.
+  - History and overlay entries now start as pending source entries and are completed in place when the translation arrives.
+  - Pending overlay entries show the source text even when the normal source-display option is off, then switch back to the configured display once translated.
