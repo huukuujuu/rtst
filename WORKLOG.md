@@ -83,3 +83,9 @@ This file tracks what has been completed so far and what Codex changes while the
   - Added phrase-level repetition collapse for cases where the same subtitle phrase is duplicated two or three times.
   - Kept short emphasis such as `no no no` unchanged.
   - Updated README, SPEC, and browser DOM tests.
+- Improvement 8: changed the overlay from a latest-subtitle surface into a translation history overlay.
+  - Removed the separate in-memory overlay entry list and now render the overlay from `translation_history`.
+  - The overlay shows the latest translated history items as a compact chat-like panel.
+  - Removed the redundant `Accumulate subtitles` UI path; overlay history is now the default behavior.
+  - Added direct bottom-right corner resizing for the overlay and persist the resized width/height to settings.
+  - Updated README and SPEC to describe the history overlay behavior.
