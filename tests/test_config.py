@@ -52,6 +52,11 @@ class ConfigTests(unittest.TestCase):
 
         self.assertFalse(settings.overlay_accumulate)
 
+    def test_overlay_enabled_accepts_string_false(self) -> None:
+        settings = _coerce_settings({"overlay_enabled": "false"})
+
+        self.assertFalse(settings.overlay_enabled)
+
 
 if __name__ == "__main__":
     unittest.main()

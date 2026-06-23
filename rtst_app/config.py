@@ -55,6 +55,7 @@ class AppSettings:
     oauth_token_url: str = "http://127.0.0.1:8787/token"
     oauth_client_id: str = "rtst-desktop"
     oauth_scope: str = "translate"
+    overlay_enabled: bool = True
     overlay_font_size: int = 28
     overlay_opacity: float = 0.9
     overlay_width: int = 720
@@ -90,6 +91,7 @@ def _coerce_settings(data: dict[str, Any]) -> AppSettings:
         settings.subtitle_source = "screen_ocr"
     if settings.overlay_position not in {"auto", "bottom", "top", "center", "custom_region", "manual"}:
         settings.overlay_position = "auto"
+    settings.overlay_enabled = _coerce_bool(settings.overlay_enabled, True)
     settings.overlay_font_size = min(max(int(settings.overlay_font_size), 14), 48)
     settings.overlay_opacity = min(max(float(settings.overlay_opacity), 0.3), 1.0)
     settings.overlay_width = min(max(int(settings.overlay_width), 320), 2400)

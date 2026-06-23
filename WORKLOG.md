@@ -89,3 +89,8 @@ This file tracks what has been completed so far and what Codex changes while the
   - Removed the redundant `Accumulate subtitles` UI path; overlay history is now the default behavior.
   - Added direct bottom-right corner resizing for the overlay and persist the resized width/height to settings.
   - Updated README and SPEC to describe the history overlay behavior.
+- Improvement 9: added overlay on/off and scrollable history behavior.
+  - Added `overlay_enabled` to settings and a `Show overlay` checkbox in the Overlay tab.
+  - Replaced the overlay's static label with a read-only scrollable text panel.
+  - New translations still scroll the overlay to the newest entry, but older entries remain reachable by scrolling inside the overlay panel.
+  - Kept direct resizing through the bottom-right size grip.

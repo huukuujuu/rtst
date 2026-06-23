@@ -13,12 +13,14 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizeGrip,
     QSlider,
     QSpinBox,
     QTabWidget,
@@ -174,31 +176,68 @@ class OverlayWindow(QWidget):
         self.setCursor(Qt.CursorShape.SizeAllCursor)
         self._drag_start_global: QPoint | None = None
         self._drag_start_top_left: QPoint | None = None
-        self._resize_start_global: QPoint | None = None
-        self._resize_start_size: QSize | None = None
+        self._last_reported_size = QSize()
+        self._applying_geometry = False
 
-        self.label = QLabel("")
-        self.label.setWordWrap(True)
-        self.label.setTextFormat(Qt.TextFormat.RichText)
-        self.label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        self.label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.header = QLabel("RTST History")
+        self.header.setFixedHeight(24)
+        self.header.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        self.header.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+        self.text_view = QTextEdit()
+        self.text_view.setReadOnly(True)
+        self.text_view.setFrameShape(QFrame.Shape.NoFrame)
+        self.text_view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.text_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        grip_row = QHBoxLayout()
+        grip_row.setContentsMargins(0, 0, 4, 4)
+        grip_row.addStretch(1)
+        self.size_grip = QSizeGrip(self)
+        grip_row.addWidget(self.size_grip)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.label)
+        layout.setSpacing(0)
+        layout.addWidget(self.header)
+        layout.addWidget(self.text_view)
+        layout.addLayout(grip_row)
         self.hide()
 
     def update_style(self, font_size: int, opacity: float) -> None:
         alpha = int(230 * opacity)
-        self.label.setStyleSheet(
+        self.header.setStyleSheet(
             f"""
             QLabel {{
                 color: white;
                 background-color: rgba(8, 12, 18, {alpha});
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                padding: 2px 10px;
+                font-size: {max(11, font_size - 12)}px;
+                font-weight: 600;
+            }}
+            """
+        )
+        self.text_view.setStyleSheet(
+            f"""
+            QTextEdit {{
+                color: white;
+                background-color: rgba(8, 12, 18, {alpha});
                 border: 1px solid rgba(255, 255, 255, {int(50 * opacity)});
-                border-radius: 8px;
-                padding: 12px 16px;
+                border-top: 0;
+                border-bottom-left-radius: 8px;
+                border-bottom-right-radius: 8px;
+                padding: 8px 10px;
                 font-size: {font_size}px;
+            }}
+            QScrollBar:vertical {{
+                background: rgba(255, 255, 255, 20);
+                width: 10px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: rgba(255, 255, 255, 90);
+                border-radius: 4px;
             }}
             """
         )
@@ -213,18 +252,13 @@ class OverlayWindow(QWidget):
         width = min(max(settings.overlay_width, minimum_width), max_width)
         max_height = max(80, available.height() - 24)
         height = min(max(settings.overlay_max_height, 80), max_height)
-        self.label.setFixedSize(width, height)
-        self.setFixedSize(width, height)
+        self.setMinimumSize(320, 120)
+        self.setMaximumSize(min(2400, available.width() - 24), min(1200, available.height() - 24))
+        self.resize(width, height)
         return width, height
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
-            return
-        if self._is_resize_pos(event.position().toPoint()):
-            self._resize_start_global = event.globalPosition().toPoint()
-            self._resize_start_size = self.size()
-            self.setCursor(Qt.CursorShape.SizeFDiagCursor)
-            event.accept()
             return
         self._drag_start_global = event.globalPosition().toPoint()
         self._drag_start_top_left = self.frameGeometry().topLeft()
@@ -232,18 +266,8 @@ class OverlayWindow(QWidget):
         event.accept()
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if self._resize_start_global is not None and self._resize_start_size is not None:
-            delta = event.globalPosition().toPoint() - self._resize_start_global
-            width = self._resize_start_size.width() + delta.x()
-            height = self._resize_start_size.height() + delta.y()
-            self._resize_to(width, height)
-            event.accept()
-            return
         if self._drag_start_global is None or self._drag_start_top_left is None:
-            if self._is_resize_pos(event.position().toPoint()):
-                self.setCursor(Qt.CursorShape.SizeFDiagCursor)
-            else:
-                self.setCursor(Qt.CursorShape.SizeAllCursor)
+            self.setCursor(Qt.CursorShape.SizeAllCursor)
             return
         delta = event.globalPosition().toPoint() - self._drag_start_global
         self.move(self._drag_start_top_left + delta)
@@ -251,13 +275,6 @@ class OverlayWindow(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
-            return
-        if self._resize_start_global is not None:
-            self._resize_start_global = None
-            self._resize_start_size = None
-            self.setCursor(Qt.CursorShape.SizeAllCursor)
-            self.size_changed.emit(self.width(), self.height())
-            event.accept()
             return
         self._drag_start_global = None
         self._drag_start_top_left = None
@@ -274,17 +291,14 @@ class OverlayWindow(QWidget):
         painter.drawLine(right - 18, bottom, right, bottom - 18)
         painter.drawLine(right - 10, bottom, right, bottom - 10)
 
-    def _is_resize_pos(self, point: QPoint) -> bool:
-        return point.x() >= self.width() - 24 and point.y() >= self.height() - 24
-
-    def _resize_to(self, width: int, height: int) -> None:
-        screen = QGuiApplication.screenAt(self.frameGeometry().center()) or QGuiApplication.primaryScreen()
-        available = screen.availableGeometry() if screen else QRect(0, 0, 2400, 1200)
-        clamped_width = min(max(width, 320), min(2400, max(320, available.width() - 24)))
-        clamped_height = min(max(height, 80), min(1200, max(80, available.height() - 24)))
-        self.label.setFixedSize(clamped_width, clamped_height)
-        self.setFixedSize(clamped_width, clamped_height)
-        self.update()
+    def resizeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        super().resizeEvent(event)
+        if self._applying_geometry or not self.isVisible():
+            return
+        if self.size() == self._last_reported_size:
+            return
+        self._last_reported_size = self.size()
+        self.size_changed.emit(self.width(), self.height())
 
     def show_text(self, text: str, region: CaptureRegion, settings: AppSettings) -> None:
         if not text:
@@ -292,7 +306,8 @@ class OverlayWindow(QWidget):
             return
 
         self.update_style(settings.overlay_font_size, settings.overlay_opacity)
-        self.label.setText(text)
+        self.text_view.setHtml(text)
+        self.text_view.moveCursor(QTextCursor.MoveOperation.End)
 
         screen = QGuiApplication.screenAt(QPoint(region.left, region.top))
         available = screen.availableGeometry() if screen else QGuiApplication.primaryScreen().availableGeometry()
@@ -303,8 +318,10 @@ class OverlayWindow(QWidget):
         y = y_above if y_above >= available.top() + 12 else y_below
         y = min(max(y, available.top() + 12), available.bottom() - height - 12)
 
+        self._applying_geometry = True
         self.setGeometry(x, y, width, height)
-        self.setFixedSize(width, height)
+        self._last_reported_size = QSize(width, height)
+        self._applying_geometry = False
         self.show()
 
     def show_text_positioned(
@@ -323,7 +340,8 @@ class OverlayWindow(QWidget):
             return
 
         self.update_style(settings.overlay_font_size, settings.overlay_opacity)
-        self.label.setText(text)
+        self.text_view.setHtml(text)
+        self.text_view.moveCursor(QTextCursor.MoveOperation.End)
 
         screen = QGuiApplication.primaryScreen()
         if custom_region is not None:
@@ -354,8 +372,10 @@ class OverlayWindow(QWidget):
         x = min(max(x, available.left() + 12), available.right() - width - 12)
         y = min(max(y, available.top() + 12), available.bottom() - height - 12)
 
+        self._applying_geometry = True
         self.setGeometry(x, y, width, height)
-        self.setFixedSize(width, height)
+        self._last_reported_size = QSize(width, height)
+        self._applying_geometry = False
         self.show()
 
 
@@ -577,6 +597,7 @@ class MainWindow(QMainWindow):
         self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self.opacity_slider.setRange(30, 100)
 
+        self.overlay_enabled_check = QCheckBox("Show overlay")
         self.overlay_width_spin = QSpinBox()
         self.overlay_width_spin.setRange(320, 2400)
         self.overlay_width_spin.setSingleStep(40)
@@ -669,6 +690,7 @@ class MainWindow(QMainWindow):
 
         overlay_tab = QWidget()
         overlay_form = QFormLayout(overlay_tab)
+        overlay_form.addRow("", self.overlay_enabled_check)
         overlay_form.addRow("Overlay font", self.font_spin)
         overlay_form.addRow("Overlay opacity", self.opacity_slider)
         overlay_form.addRow("Overlay width", self.overlay_width_spin)
@@ -694,6 +716,7 @@ class MainWindow(QMainWindow):
         self.translation_history_limit_spin.valueChanged.connect(self._trim_translation_history)
         self.source_combo.currentTextChanged.connect(self._handle_source_changed)
         self.provider_combo.currentTextChanged.connect(self._handle_provider_changed)
+        self.overlay_enabled_check.stateChanged.connect(self._handle_overlay_enabled_changed)
         self.opacity_slider.valueChanged.connect(self._preview_overlay_style)
         self.font_spin.valueChanged.connect(self._preview_overlay_style)
         self.overlay_width_spin.valueChanged.connect(self._preview_overlay_position)
@@ -720,6 +743,7 @@ class MainWindow(QMainWindow):
         )
         self.font_spin.setValue(self.settings.overlay_font_size)
         self.opacity_slider.setValue(round(self.settings.overlay_opacity * 100))
+        self.overlay_enabled_check.setChecked(self.settings.overlay_enabled)
         self.overlay_width_spin.setValue(self.settings.overlay_width)
         self.overlay_height_spin.setValue(self.settings.overlay_max_height)
         self.overlay_position_combo.setCurrentText(self.settings.overlay_position)
@@ -749,6 +773,7 @@ class MainWindow(QMainWindow):
             oauth_token_url=os.getenv("RTST_OAUTH_TOKEN_URL", self.settings.oauth_token_url),
             oauth_client_id=os.getenv("RTST_OAUTH_CLIENT_ID", self.settings.oauth_client_id),
             oauth_scope=os.getenv("RTST_OAUTH_SCOPE", self.settings.oauth_scope),
+            overlay_enabled=self.overlay_enabled_check.isChecked(),
             overlay_font_size=self.font_spin.value(),
             overlay_opacity=self.opacity_slider.value() / 100,
             overlay_width=self.overlay_width_spin.value(),
@@ -1152,6 +1177,9 @@ class MainWindow(QMainWindow):
 
     def _show_overlay_history(self) -> None:
         self.settings = self._settings_from_ui()
+        if not self.settings.overlay_enabled:
+            self.overlay.hide()
+            return
         html = self._overlay_history_html()
         if not html:
             self.overlay.hide()
@@ -1173,6 +1201,9 @@ class MainWindow(QMainWindow):
         return CaptureRegion(left=left, top=top, width=width, height=height)
 
     def _show_overlay_text(self, display_text: str) -> None:
+        if not self.settings.overlay_enabled:
+            self.overlay.hide()
+            return
         position = self.settings.overlay_position
         if position == "auto":
             overlay_region = self._overlay_region()
@@ -1195,6 +1226,16 @@ class MainWindow(QMainWindow):
     def _refresh_overlay_history(self) -> None:
         self.settings = self._settings_from_ui()
         self._show_overlay_history()
+
+    def _handle_overlay_enabled_changed(self, *_args: object) -> None:
+        self.settings = self._settings_from_ui()
+        save_settings(self.settings)
+        if not self.settings.overlay_enabled:
+            self.overlay.hide()
+            self.status_label.setText("Overlay hidden")
+            return
+        self._show_overlay_history()
+        self.status_label.setText("Overlay enabled")
 
     def _handle_overlay_dragged(self, x: int, y: int) -> None:
         self.settings = replace(
@@ -1229,6 +1270,9 @@ class MainWindow(QMainWindow):
 
     def _preview_overlay_position(self) -> None:
         self.settings = self._settings_from_ui()
+        if not self.settings.overlay_enabled:
+            self.overlay.hide()
+            return
         if self.translation_history:
             self._show_overlay_history()
             return
