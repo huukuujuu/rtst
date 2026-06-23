@@ -547,13 +547,16 @@ def build_subtitle_script(subtitle_selector: str = "") -> str:
     if (!videos.length) return true;
     const videoRect = videos[0];
     const horizontalOverlap = rect.right >= videoRect.left && rect.left <= videoRect.right;
-    const insideReadableBand =
-      centerY >= videoRect.top + videoRect.height * 0.45 &&
-      centerY <= videoRect.bottom + videoRect.height * 0.12;
+    const verticalPadding = Math.max(12, videoRect.height * 0.03);
+    const subtitleVerticalBandTop = videoRect.top - verticalPadding;
+    const subtitleVerticalBandBottom = videoRect.bottom + verticalPadding;
+    const insideVideoVerticalBand =
+      centerY >= subtitleVerticalBandTop &&
+      centerY <= subtitleVerticalBandBottom;
     const centeredOnVideo =
       centerX >= videoRect.left - videoRect.width * 0.05 &&
       centerX <= videoRect.right + videoRect.width * 0.05;
-    return horizontalOverlap && insideReadableBand && centeredOnVideo;
+    return horizontalOverlap && insideVideoVerticalBand && centeredOnVideo;
   }}
 
   function hasSubtitleDescendant(element) {{

@@ -60,6 +60,14 @@ class BrowserDomTests(unittest.TestCase):
         self.assertIn("captionAreaCandidate", script)
         self.assertIn("hasSubtitleDescendant", script)
 
+    def test_script_allows_top_positioned_dom_captions(self) -> None:
+        script = build_subtitle_script()
+
+        self.assertIn("subtitleVerticalBandTop", script)
+        self.assertIn("subtitleVerticalBandBottom", script)
+        self.assertIn("insideVideoVerticalBand", script)
+        self.assertNotIn("videoRect.height * 0.45", script)
+
     def test_tab_probe_script_scores_video_and_iframes(self) -> None:
         script = build_tab_probe_script()
 

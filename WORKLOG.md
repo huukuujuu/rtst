@@ -98,3 +98,7 @@ This file tracks what has been completed so far and what Codex changes while the
   - Removed the `Overlay history` UI limit.
   - The overlay now renders every entry retained by `translation_history`, matching the History tab's current retention window.
   - `History > Max` is the single control for how much history is retained overall.
+- Improvement 11: widened DOM subtitle position filtering for top-positioned captions.
+  - Replaced the lower-half-only DOM caption band with a full video-height band plus a small tolerance.
+  - This allows subtitle elements rendered near the top of the video while keeping horizontal video-overlap and player-control filtering.
+  - Added a regression test so the old `videoRect.height * 0.45` lower-bound heuristic does not come back unnoticed.
